@@ -1,0 +1,29 @@
+syntax = "proto3";
+
+package galaxy.galaxy;
+
+option go_package = "galaxy/authority-chain/x/galaxy/types";
+
+service Msg {
+  rpc SubmitEvent(MsgSubmitEvent) returns (MsgSubmitEventResponse);
+  rpc VoteEvent(MsgVoteEvent) returns (MsgVoteEventResponse);
+}
+
+message MsgSubmitEvent {
+  string creator = 1;
+  string device_id = 2;
+  string event_type = 3;
+  uint64 confidence = 4;
+  bytes frame_hash = 5;
+  bytes signature = 6;
+}
+
+message MsgSubmitEventResponse {}
+
+message MsgVoteEvent {
+  string validator = 1;
+  bytes frame_hash = 2;
+  uint32 vote = 3;
+}
+
+message MsgVoteEventResponse {}
