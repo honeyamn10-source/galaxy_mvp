@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Phase IV integration test: edge + FL + predictive -> swarm -> authority chain."""
+"""Phase V integration test: economy + webhook + compliance + prior flows."""
 
 import random
 import string
@@ -12,6 +12,8 @@ AUTHORITY = "http://localhost:1317"
 EDGE = "http://localhost:8100"
 FL_AGGREGATOR = "http://localhost:8200"
 PREDICTIVE = "http://localhost:8300"
+WEBHOOK = "http://localhost:8500"
+COMPLIANCE = "http://localhost:8400"
 
 
 class Colors:
@@ -95,6 +97,78 @@ def wait_for_authority_events(min_total, timeout=30):
     fail("events did not arrive from swarm to authority in time")
 
 
+def register_planet(device_id: str, wallet: str):
+    print_header("Register planet wallet for token rewards")
+    res = requests.post(
+        f"{AUTHORITY}/economy/v1/planet/register",
+        json={"device_id": device_id, "wallet": wallet},
+        timeout=8,
+    )
+    if res.status_code != 200:
+        fail(f"planet register failed: {res.text}")
+    print_ok(f"Planet {device_id} mapped to wallet {wallet}")
+
+
+def device_balance(device_id: str) -> dict:
+    res = requests.get(f"{AUTHORITY}/economy/v1/balance/by-device/{device_id}", timeout=8)
+    if res.status_code != 200:
+        fail(f"balance query failed: {res.text}")
+    return res.json()
+
+
+def register_webhook_subscription():
+    print_header("Register tenant webhook subscription")
+    target = "http://webhook-service:8500/debug/mock-receiver"
+    res = requests.post(
+        f"{WEBHOOK}/webhooks/register",
+        json={"tenant_id": "tenant-a", "target_url": target, "enabled": True},
+        timeout=8,
+    )
+    if res.status_code != 200:
+        fail(f"webhook registration failed: {res.text}")
+    print_ok("Webhook subscription registered")
+
+
+def wait_for_webhook_delivery(timeout=40):
+    print_header("Verify webhook delivery")
+    deadline = time.time() + timeout
+    while time.time() < deadline:
+        res = requests.get(f"{WEBHOOK}/debug/received?limit=10", timeout=8)
+        if res.status_code == 200:
+            data = res.json()
+            if data.get("count", 0) > 0:
+                print_ok("Webhook delivery captured by debug receiver")
+                return data
+        time.sleep(2)
+    fail("webhook delivery was not observed in time")
+
+
+def verify_compliance_redaction():
+    print_header("Verify compliance redaction and encryption")
+    payload = {
+        "tenant": "tenant-a",
+        "tenant_region": "eu",
+        "event": {
+            "device_id": "planet-01",
+            "event_type": "health_alert",
+            "confidence": 0.95,
+            "name": "Alice",
+            "person_name": "Alice Example",
+        },
+    }
+    res = requests.post(f"{COMPLIANCE}/transform", json=payload, timeout=8)
+    if res.status_code != 200:
+        fail(f"compliance transform failed: {res.text}")
+
+    body = res.json()
+    transformed = body.get("event", {})
+    if transformed.get("name") == "Alice":
+        fail("GDPR masking did not redact 'name'")
+    if "payload_encrypted" not in transformed:
+        fail("HIPAA encryption field missing")
+    print_ok("Compliance engine redaction and encryption verified")
+
+
 def run_fl_once():
     print_header("Verify federated learning endpoints")
 
@@ -163,15 +237,23 @@ def summarize(data):
 
 
 def main():
-    print(f"\n{Colors.BOLD}{Colors.HEADER}=== GALAXY PHASE IV INTELLIGENCE TEST ==={Colors.ENDC}")
+    print(f"\n{Colors.BOLD}{Colors.HEADER}=== GALAXY PHASE V EXPANSION TEST ==={Colors.ENDC}")
 
     wait_for_health(f"{AUTHORITY}/health", "authority")
     wait_for_health(f"{EDGE}/health", "edge-planet")
     wait_for_health(f"{FL_AGGREGATOR}/health", "fl-aggregator")
     wait_for_health(f"{PREDICTIVE}/health", "predictive-service")
+    wait_for_health(f"{WEBHOOK}/health", "webhook-service")
+    wait_for_health(f"{COMPLIANCE}/health", "compliance-engine")
 
     submitter = random_submitter()
     device_id = "planet-01"
+    wallet = "galaxy1planetreward"
+
+    register_planet(device_id, wallet)
+    register_webhook_subscription()
+    before = device_balance(device_id)
+    print_info(f"Initial balance={before.get('balance')} staked={before.get('staked')}")
 
     send_events_via_edge(submitter, device_id, count=8)
     data = wait_for_authority_events(min_total=8)
@@ -179,6 +261,14 @@ def main():
 
     run_fl_once()
     run_predictive_once(min_predictions=1)
+    verify_compliance_redaction()
+    wait_for_webhook_delivery()
+
+    after = device_balance(device_id)
+    print_info(f"Post-event balance={after.get('balance')} staked={after.get('staked')}")
+    if int(after.get("balance", 0)) <= int(before.get("balance", 0)):
+        fail("token reward was not credited after verified events")
+    print_ok("Token rewards credited to registered planet wallet")
 
     cosmos_res = requests.get(
         f"{AUTHORITY}/cosmos/tx/v1beta1/txs",
@@ -191,8 +281,8 @@ def main():
     if cosmos_res.status_code == 200:
         print_ok("Cosmos transaction query endpoint reachable")
 
-    print_ok("Phase IV edge->swarm->authority + FL + predictive flow verified")
-    print_warn("Optional: open dashboard to inspect predictive alerts in the Phase IV panel.")
+    print_ok("Phase V economy + webhook + compliance flow verified")
+    print_warn("Optional: open dashboard to inspect token balance and staking panel.")
 
 
 if __name__ == "__main__":

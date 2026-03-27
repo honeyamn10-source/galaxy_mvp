@@ -1,20 +1,22 @@
-.PHONY: help setup up down logs test clean rebuild swarm-certs swarm-up swarm-down swarm-test chain-unit-test
+.PHONY: help setup up down logs test clean rebuild swarm-certs swarm-up swarm-down swarm-test chain-unit-test phase-v-test contracts-test ibc-up
 
 help:
-	@echo "🌌 Galaxy Event Detection System - Phase IV"
+	@echo "🌌 Galaxy Event Detection System - Phase V"
 	@echo ""
 	@echo "Available commands:"
 	@echo "  make setup       - Install dependencies and initialize"
 	@echo "  make up          - Start all services (Docker Compose)"
 	@echo "  make down        - Stop all services"
-	@echo "  make logs        - View authority, swarm, and intelligence logs (follow)"
-	@echo "  make test        - Run integration tests (edge + FL + predictive)"
+	@echo "  make logs        - View authority, swarm, intelligence, webhook, compliance logs"
+	@echo "  make test        - Run full integration tests (Phase V)"
 	@echo "  make clean       - Stop services and remove volumes"
 	@echo "  make rebuild     - Rebuild containers from scratch"
 	@echo "  make swarm-certs - Generate local mTLS certs for Phase II"
 	@echo "  make swarm-up    - Start authority + swarm + edge services"
 	@echo "  make swarm-down  - Stop all services including swarm"
-	@echo "  make swarm-test  - Run Phase IV end-to-end intelligence test"
+	@echo "  make swarm-test  - Run Phase V end-to-end test"
+	@echo "  make contracts-test - Run CosmWasm contract unit tests"
+	@echo "  make ibc-up      - Start Hermes relayer profile"
 	@echo "  make db          - Connect to PostgreSQL CLI"
 	@echo "  make redis       - Connect to Redis CLI"
 	@echo ""
@@ -46,11 +48,13 @@ down:
 	@echo "✓ Stopped"
 
 logs:
-	docker-compose logs -f authority-chain swarm-node-1 swarm-node-2 edge-planet fl-aggregator predictive-service
+	docker-compose logs -f authority-chain swarm-node-1 swarm-node-2 edge-planet fl-aggregator predictive-service webhook-service compliance-engine
 
 test:
-	@echo "🧪 Running Phase IV integration tests..."
+	@echo "🧪 Running Phase V integration tests..."
 	python3 test-phase1.py
+
+phase-v-test: test
 
 swarm-certs:
 	@echo "🔐 Generating Phase II dev certificates..."
@@ -58,18 +62,26 @@ swarm-certs:
 	@echo "✓ Certificates ready in infra/certs/dev"
 
 swarm-up: swarm-certs
-	@echo "🚀 Starting full Phase IV stack..."
+	@echo "🚀 Starting full Phase V stack..."
 	docker-compose up -d --build
-	@echo "✓ Phase IV services starting"
+	@echo "✓ Phase V services starting"
 
 swarm-down:
-	@echo "🛑 Stopping Phase IV stack..."
+	@echo "🛑 Stopping Phase V stack..."
 	docker-compose down
 	@echo "✓ Stopped"
 
 swarm-test: swarm-up
-	@echo "🧪 Running Phase IV swarm integration tests..."
+	@echo "🧪 Running Phase V swarm integration tests..."
 	python3 test-phase1.py
+
+contracts-test:
+	@echo "🧪 Running CosmWasm contract tests..."
+	bash economic-layer/scripts/run_contract_tests.sh
+
+ibc-up:
+	@echo "🌉 Starting Hermes relayer profile..."
+	docker-compose --profile ibc up -d hermes-relayer
 
 chain-unit-test:
 	@echo "🧪 Running authority-chain unit tests..."
