@@ -129,6 +129,10 @@ body {
   border-color: rgba(245, 158, 11, 0.3);
 }
 
+.stat-card.high-risk {
+  border-color: rgba(239, 68, 68, 0.35);
+}
+
 /* ========== EVENTS TABLE ========== */
 
 .events {

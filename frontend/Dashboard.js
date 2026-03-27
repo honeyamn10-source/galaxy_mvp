@@ -3,10 +3,12 @@ import './Dashboard.css';
 
 export default function Dashboard() {
   const [events, setEvents] = useState([]);
+  const [predictions, setPredictions] = useState([]);
   const [stats, setStats] = useState({
     total: 0,
     verified: 0,
-    pending: 0
+    pending: 0,
+    highRisk: 0
   });
   const [connected, setConnected] = useState(false);
   const [wsConnected, setWsConnected] = useState(false);
@@ -64,11 +66,12 @@ export default function Dashboard() {
         const verified = items.filter(e => e.verified).length;
         const pending = items.filter(e => !e.verified).length;
 
-        setStats({
+        setStats((current) => ({
           total: dataSource === 'cosmos' ? (data.pagination?.total ? Number(data.pagination.total) : items.length) : data.total,
           verified,
-          pending
-        });
+          pending,
+          highRisk: current.highRisk
+        }));
 
         setConnected(true);
       }
@@ -78,12 +81,39 @@ export default function Dashboard() {
     }
   };
 
+  const fetchPredictions = async () => {
+    try {
+      const response = await fetch('http://localhost:8300/predictions/latest');
+      if (!response.ok) {
+        return;
+      }
+
+      const data = await response.json();
+      const items = data.items || [];
+      setPredictions(items);
+
+      const highRisk = items.filter((item) => item.risk_level === 'high').length;
+      setStats((current) => ({
+        ...current,
+        highRisk
+      }));
+    } catch (error) {
+      console.warn('Failed to fetch predictions:', error);
+    }
+  };
+
   // Poll for new events
   useEffect(() => {
     fetchEvents();
     const interval = setInterval(fetchEvents, 5000); // Refresh every 5 seconds
     return () => clearInterval(interval);
   }, [apiKey, dataSource]);
+
+  useEffect(() => {
+    fetchPredictions();
+    const interval = setInterval(fetchPredictions, 8000);
+    return () => clearInterval(interval);
+  }, []);
 
   // WebSocket for real-time updates (optional)
   useEffect(() => {
@@ -233,6 +263,42 @@ export default function Dashboard() {
           <h3>Pending</h3>
           <div className="stat-number">{stats.pending}</div>
         </div>
+        <div className="stat-card high-risk">
+          <h3>High Risk Alerts</h3>
+          <div className="stat-number">{stats.highRisk}</div>
+        </div>
+      </section>
+
+      <section className="events">
+        <h2>Predictive Alerts</h2>
+        {predictions.length === 0 ? (
+          <p className="empty-state">No predictive alerts yet.</p>
+        ) : (
+          <table className="events-table">
+            <thead>
+              <tr>
+                <th>Zone</th>
+                <th>Risk</th>
+                <th>Confidence</th>
+                <th>Forecast</th>
+              </tr>
+            </thead>
+            <tbody>
+              {predictions.slice(0, 10).map((prediction) => (
+                <tr key={prediction.frame_hash || prediction.location} className={prediction.risk_level === 'high' ? 'pending' : 'verified'}>
+                  <td><strong>{prediction.location || 'unknown-zone'}</strong></td>
+                  <td>
+                    <span className={`badge ${prediction.risk_level === 'high' ? 'pending' : 'verified'}`}>
+                      {prediction.risk_level === 'high' ? 'High Risk' : 'Normal'}
+                    </span>
+                  </td>
+                  <td>{((prediction.confidence || 0) * 100).toFixed(1)}%</td>
+                  <td>{prediction.meta?.forecast_horizon || '1h'}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
       </section>
 
       <section className="events">

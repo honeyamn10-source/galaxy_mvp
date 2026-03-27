@@ -1,20 +1,20 @@
 .PHONY: help setup up down logs test clean rebuild swarm-certs swarm-up swarm-down swarm-test chain-unit-test
 
 help:
-	@echo "🌌 Galaxy Event Detection System - Phase III"
+	@echo "🌌 Galaxy Event Detection System - Phase IV"
 	@echo ""
 	@echo "Available commands:"
 	@echo "  make setup       - Install dependencies and initialize"
 	@echo "  make up          - Start all services (Docker Compose)"
 	@echo "  make down        - Stop all services"
-	@echo "  make logs        - View authority and swarm logs (follow)"
-	@echo "  make test        - Run integration tests (edge -> swarm -> authority)"
+	@echo "  make logs        - View authority, swarm, and intelligence logs (follow)"
+	@echo "  make test        - Run integration tests (edge + FL + predictive)"
 	@echo "  make clean       - Stop services and remove volumes"
 	@echo "  make rebuild     - Rebuild containers from scratch"
 	@echo "  make swarm-certs - Generate local mTLS certs for Phase II"
 	@echo "  make swarm-up    - Start authority + swarm + edge services"
 	@echo "  make swarm-down  - Stop all services including swarm"
-	@echo "  make swarm-test  - Run Phase III end-to-end swarm test"
+	@echo "  make swarm-test  - Run Phase IV end-to-end intelligence test"
 	@echo "  make db          - Connect to PostgreSQL CLI"
 	@echo "  make redis       - Connect to Redis CLI"
 	@echo ""
@@ -46,10 +46,10 @@ down:
 	@echo "✓ Stopped"
 
 logs:
-	docker-compose logs -f authority-chain swarm-node-1 swarm-node-2 edge-planet
+	docker-compose logs -f authority-chain swarm-node-1 swarm-node-2 edge-planet fl-aggregator predictive-service
 
 test:
-	@echo "🧪 Running Phase III integration tests..."
+	@echo "🧪 Running Phase IV integration tests..."
 	python3 test-phase1.py
 
 swarm-certs:
@@ -58,17 +58,17 @@ swarm-certs:
 	@echo "✓ Certificates ready in infra/certs/dev"
 
 swarm-up: swarm-certs
-	@echo "🚀 Starting full Phase III stack..."
+	@echo "🚀 Starting full Phase IV stack..."
 	docker-compose up -d --build
-	@echo "✓ Phase III services starting"
+	@echo "✓ Phase IV services starting"
 
 swarm-down:
-	@echo "🛑 Stopping Phase III stack..."
+	@echo "🛑 Stopping Phase IV stack..."
 	docker-compose down
 	@echo "✓ Stopped"
 
 swarm-test: swarm-up
-	@echo "🧪 Running Phase III swarm integration tests..."
+	@echo "🧪 Running Phase IV swarm integration tests..."
 	python3 test-phase1.py
 
 chain-unit-test:
