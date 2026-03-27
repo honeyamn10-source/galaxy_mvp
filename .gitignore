@@ -1,0 +1,10 @@
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.swp
+*.swo
+
+infra/certs/dev/
+authority-chain/gateway/__pycache__/
+edge-planet/__pycache__/
