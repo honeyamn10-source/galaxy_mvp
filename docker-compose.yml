@@ -1,0 +1,153 @@
+version: "3.9"
+
+services:
+  # PostgreSQL database
+  postgres:
+    image: postgres:15-alpine
+    container_name: galaxy-db
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: galaxy
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Redis for real-time events
+  redis:
+    image: redis:7-alpine
+    container_name: galaxy-redis
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Authority chain node (galaxyd)
+  authority-chain:
+    build: ./authority-chain
+    container_name: galaxy-authority-chain
+    ports:
+      - "1317:1317"
+      - "9090:9090"
+      - "26657:26657"
+    environment:
+      CHAIN_ID: galaxy-1
+      CHAIN_DATA_DIR: /data
+      CHAIN_VOTE_THRESHOLD: 2
+      CHAIN_GRPC_ADDR: 0.0.0.0:9090
+      CHAIN_REST_ADDR: 0.0.0.0:1317
+      CHAIN_RPC_ADDR: 0.0.0.0:26657
+      CHAIN_REWARD_UGALAXY: 100
+      CHAIN_VOTE_WINDOW_SECONDS: 3600
+    volumes:
+      - authority_data:/data
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:1317/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  swarm-node-1:
+    build: ./swarm-node
+    container_name: galaxy-swarm-node-1
+    environment:
+      SWARM_NODE_NAME: swarm-node-1
+      SWARM_IDENTITY_SEED: swarm-node-1
+      SWARM_P2P_PORT: 7001
+      SWARM_INGRESS_ADDR: ":8443"
+      SWARM_HEALTH_ADDR: ":8081"
+      SWARM_RENDEZVOUS: galaxy-v2
+      SWARM_BOOTSTRAP_SEEDS: ""
+      SWARM_FORWARD_MODE: validator-grpc
+      VALIDATOR_GRPC_ADDR: authority-chain:9090
+      SWARM_CREATOR_ADDRESS: galaxy1swarmsubmitter
+      SWARM_TLS_CERT: /certs/swarm-node.crt
+      SWARM_TLS_KEY: /certs/swarm-node.key
+      SWARM_CLIENT_CA: /certs/ca.crt
+    ports:
+      - "7001:7001"
+      - "8443:8443"
+      - "8081:8081"
+    depends_on:
+      authority-chain:
+        condition: service_started
+    volumes:
+      - ./infra/certs/dev:/certs:ro
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:8081/healthz"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  swarm-node-2:
+    build: ./swarm-node
+    container_name: galaxy-swarm-node-2
+    environment:
+      SWARM_NODE_NAME: swarm-node-2
+      SWARM_IDENTITY_SEED: swarm-node-2
+      SWARM_P2P_PORT: 7001
+      SWARM_INGRESS_ADDR: ":8443"
+      SWARM_HEALTH_ADDR: ":8081"
+      SWARM_RENDEZVOUS: galaxy-v2
+      SWARM_BOOTSTRAP_SEEDS: swarm-node-1@swarm-node-1:7001
+      SWARM_FORWARD_MODE: validator-grpc
+      VALIDATOR_GRPC_ADDR: authority-chain:9090
+      SWARM_CREATOR_ADDRESS: galaxy1swarmsubmitter
+      SWARM_TLS_CERT: /certs/swarm-node.crt
+      SWARM_TLS_KEY: /certs/swarm-node.key
+      SWARM_CLIENT_CA: /certs/ca.crt
+    ports:
+      - "7002:7001"
+      - "8444:8443"
+      - "8082:8081"
+    depends_on:
+      swarm-node-1:
+        condition: service_healthy
+    volumes:
+      - ./infra/certs/dev:/certs:ro
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:8081/healthz"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  edge-planet:
+    build: ./edge-planet
+    container_name: galaxy-edge-planet
+    environment:
+      SWARM_INGEST_URL: https://swarm-node-1:8443/ingest
+      EDGE_TENANT_API_KEY: ""
+      EDGE_DEVICE_ID: ""
+      EDGE_CA_CERT: /certs/ca.crt
+      EDGE_CLIENT_CERT: /certs/edge-planet.crt
+      EDGE_CLIENT_KEY: /certs/edge-planet.key
+    ports:
+      - "8100:8100"
+    depends_on:
+      swarm-node-1:
+        condition: service_healthy
+    volumes:
+      - ./infra/certs/dev:/certs:ro
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8100/health', timeout=3)"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  postgres_data:
+  authority_data:

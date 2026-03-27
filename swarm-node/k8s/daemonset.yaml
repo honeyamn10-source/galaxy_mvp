@@ -1,0 +1,84 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: swarm-node-config
+  namespace: galaxy
+
+data:
+  SWARM_RENDEZVOUS: galaxy-v2
+  BACKEND_EVENTS_URL: http://authority.galaxy.svc.cluster.local:8000/events
+  SWARM_P2P_PORT: "7001"
+  SWARM_INGRESS_ADDR: ":8443"
+  SWARM_HEALTH_ADDR: ":8081"
+  SWARM_DISCOVERY_INTERVAL: 15s
+---
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: swarm-node
+  namespace: galaxy
+spec:
+  selector:
+    matchLabels:
+      app: swarm-node
+  template:
+    metadata:
+      labels:
+        app: swarm-node
+    spec:
+      serviceAccountName: default
+      containers:
+      - name: swarm-node
+        image: ghcr.io/your-org/swarm-node:latest
+        imagePullPolicy: IfNotPresent
+        ports:
+        - containerPort: 7001
+          name: p2p
+          protocol: TCP
+        - containerPort: 8443
+          name: ingest
+          protocol: TCP
+        - containerPort: 8081
+          name: health
+          protocol: TCP
+        env:
+        - name: SWARM_NODE_NAME
+          valueFrom:
+            fieldRef:
+              fieldPath: spec.nodeName
+        - name: SWARM_IDENTITY_SEED
+          valueFrom:
+            fieldRef:
+              fieldPath: spec.nodeName
+        - name: SWARM_BOOTSTRAP_SEEDS
+          value: bootstrap-seed@swarm-bootstrap.galaxy.svc.cluster.local:7001
+        envFrom:
+        - configMapRef:
+            name: swarm-node-config
+        livenessProbe:
+          httpGet:
+            path: /healthz
+            port: 8081
+          initialDelaySeconds: 15
+          periodSeconds: 15
+        readinessProbe:
+          httpGet:
+            path: /healthz
+            port: 8081
+          initialDelaySeconds: 5
+          periodSeconds: 10
+        resources:
+          requests:
+            cpu: 200m
+            memory: 256Mi
+          limits:
+            cpu: "1"
+            memory: 1Gi
+        volumeMounts:
+        - name: swarm-certs
+          mountPath: /certs
+          readOnly: true
+      volumes:
+      - name: swarm-certs
+        secret:
+          secretName: swarm-node-tls
