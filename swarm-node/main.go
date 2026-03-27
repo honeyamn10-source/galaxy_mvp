@@ -40,8 +40,9 @@ import (
 )
 
 const (
-	topicName        = "galaxy.events.v1"
-	defaultForwardTO = 8 * time.Second
+	eventTopicName      = "galaxy.events.v1"
+	predictionTopicName = "galaxy.predictions.v1"
+	defaultForwardTO    = 8 * time.Second
 )
 
 type Config struct {
@@ -81,6 +82,11 @@ type IngressRequest struct {
 	Event  EventPayload `json:"event"`
 }
 
+type PredictionIngressRequest struct {
+	APIKey     string         `json:"api_key"`
+	Prediction map[string]any `json:"prediction"`
+}
+
 type SwarmEnvelope struct {
 	EnvelopeID   string       `json:"envelope_id"`
 	APIKey       string       `json:"api_key"`
@@ -94,8 +100,10 @@ type App struct {
 	host        host.Host
 	dht         *dht.IpfsDHT
 	pubSub      *pubsub.PubSub
-	topic       *pubsub.Topic
-	sub         *pubsub.Subscription
+	eventTopic  *pubsub.Topic
+	eventSub    *pubsub.Subscription
+	predTopic   *pubsub.Topic
+	predSub     *pubsub.Subscription
 	httpClient  *http.Client
 	seenMu      sync.Mutex
 	seen        map[string]time.Time
@@ -117,7 +125,8 @@ func main() {
 	defer app.close()
 
 	go app.discoveryLoop(ctx)
-	go app.subscriptionLoop(ctx)
+	go app.subscriptionLoop(ctx, app.eventSub, "event")
+	go app.subscriptionLoop(ctx, app.predSub, "prediction")
 	go app.cleanupLoop(ctx)
 
 	if err := app.runHTTPServers(ctx); err != nil {
@@ -209,14 +218,24 @@ func newApp(ctx context.Context, cfg Config) (*App, error) {
 		return nil, fmt.Errorf("gossipsub init: %w", err)
 	}
 
-	topic, err := ps.Join(topicName)
+	eventTopic, err := ps.Join(eventTopicName)
 	if err != nil {
-		return nil, fmt.Errorf("topic join: %w", err)
+		return nil, fmt.Errorf("event topic join: %w", err)
 	}
 
-	sub, err := topic.Subscribe()
+	eventSub, err := eventTopic.Subscribe()
 	if err != nil {
-		return nil, fmt.Errorf("topic subscribe: %w", err)
+		return nil, fmt.Errorf("event topic subscribe: %w", err)
+	}
+
+	predTopic, err := ps.Join(predictionTopicName)
+	if err != nil {
+		return nil, fmt.Errorf("prediction topic join: %w", err)
+	}
+
+	predSub, err := predTopic.Subscribe()
+	if err != nil {
+		return nil, fmt.Errorf("prediction topic subscribe: %w", err)
 	}
 
 	app := &App{
@@ -224,8 +243,10 @@ func newApp(ctx context.Context, cfg Config) (*App, error) {
 		host:   h,
 		dht:    kad,
 		pubSub: ps,
-		topic:  topic,
-		sub:    sub,
+		eventTopic: eventTopic,
+		eventSub:   eventSub,
+		predTopic:  predTopic,
+		predSub:    predSub,
 		httpClient: &http.Client{
 			Timeout: cfg.BackendHTTPTimeout,
 		},
@@ -322,20 +343,20 @@ func (a *App) discoveryLoop(ctx context.Context) {
 	}
 }
 
-func (a *App) subscriptionLoop(ctx context.Context) {
+func (a *App) subscriptionLoop(ctx context.Context, sub *pubsub.Subscription, topicType string) {
 	for {
-		msg, err := a.sub.Next(ctx)
+		msg, err := sub.Next(ctx)
 		if err != nil {
 			if ctx.Err() != nil {
 				return
 			}
-			log.Printf("subscription read error: %v", err)
+			log.Printf("subscription read error topic=%s err=%v", topicType, err)
 			continue
 		}
 
 		var envelope SwarmEnvelope
 		if err := json.Unmarshal(msg.Data, &envelope); err != nil {
-			log.Printf("invalid envelope received: %v", err)
+			log.Printf("invalid envelope received topic=%s err=%v", topicType, err)
 			continue
 		}
 
@@ -349,7 +370,7 @@ func (a *App) subscriptionLoop(ctx context.Context) {
 		}
 
 		if err := a.forwardToAuthority(ctx, envelope); err != nil {
-			log.Printf("forward error envelope_id=%s err=%v", envelope.EnvelopeID, err)
+			log.Printf("forward error topic=%s envelope_id=%s err=%v", topicType, envelope.EnvelopeID, err)
 		}
 	}
 }
@@ -358,6 +379,7 @@ func (a *App) runHTTPServers(ctx context.Context) error {
 	handler := http.NewServeMux()
 	handler.HandleFunc("/healthz", a.handleHealth)
 	handler.HandleFunc("/ingest", a.handleIngest)
+	handler.HandleFunc("/ingest-prediction", a.handleIngestPrediction)
 
 	tlsCfg, err := a.serverTLSConfig()
 	if err != nil {
@@ -378,10 +400,11 @@ func (a *App) runHTTPServers(ctx context.Context) error {
 				return
 			}
 			writeJSON(w, http.StatusOK, map[string]any{
-				"status":   "ok",
-				"node":     a.cfg.NodeName,
-				"peer_id":  a.host.ID().String(),
-				"topic":    topicName,
+				"status":          "ok",
+				"node":            a.cfg.NodeName,
+				"peer_id":         a.host.ID().String(),
+				"event_topic":     eventTopicName,
+				"prediction_topic": predictionTopicName,
 				"forward_mode": a.cfg.ForwardMode,
 				"rendezvous": a.cfg.Rendezvous,
 			})
@@ -461,7 +484,58 @@ func (a *App) handleIngest(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := a.topic.Publish(r.Context(), data); err != nil {
+	if err := a.eventTopic.Publish(r.Context(), data); err != nil {
+		http.Error(w, "publish failed", http.StatusBadGateway)
+		return
+	}
+
+	writeJSON(w, http.StatusAccepted, map[string]any{
+		"status":      "accepted",
+		"envelope_id": envelope.EnvelopeID,
+		"origin_peer": envelope.OriginPeerID,
+	})
+}
+
+func (a *App) handleIngestPrediction(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	defer r.Body.Close()
+	body, err := io.ReadAll(io.LimitReader(r.Body, 1<<20))
+	if err != nil {
+		http.Error(w, "failed to read body", http.StatusBadRequest)
+		return
+	}
+
+	var req PredictionIngressRequest
+	if err := json.Unmarshal(body, &req); err != nil {
+		http.Error(w, "invalid json", http.StatusBadRequest)
+		return
+	}
+
+	pred, err := predictionToEvent(req)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	envelope := SwarmEnvelope{
+		EnvelopeID:   randomPredictionEnvelopeID(req),
+		APIKey:       req.APIKey,
+		Event:        pred,
+		OriginPeerID: a.host.ID().String(),
+		CreatedAt:    time.Now().UTC(),
+	}
+
+	data, err := json.Marshal(envelope)
+	if err != nil {
+		http.Error(w, "serialization failed", http.StatusInternalServerError)
+		return
+	}
+
+	if err := a.predTopic.Publish(r.Context(), data); err != nil {
 		http.Error(w, "publish failed", http.StatusBadGateway)
 		return
 	}
@@ -502,6 +576,75 @@ func validateIngress(req IngressRequest) error {
 func randomEnvelopeID(req IngressRequest) string {
 	h := sha256.Sum256([]byte(fmt.Sprintf("%s|%s|%f|%d", req.APIKey, req.Event.DeviceID, req.Event.Confidence, time.Now().UnixNano())))
 	return hex.EncodeToString(h[:16])
+}
+
+func randomPredictionEnvelopeID(req PredictionIngressRequest) string {
+	deviceID, _ := req.Prediction["device_id"].(string)
+	h := sha256.Sum256([]byte(fmt.Sprintf("%s|%s|%d", req.APIKey, deviceID, time.Now().UnixNano())))
+	return hex.EncodeToString(h[:16])
+}
+
+func predictionToEvent(req PredictionIngressRequest) (EventPayload, error) {
+	if req.APIKey == "" {
+		return EventPayload{}, errors.New("api_key is required")
+	}
+	if req.Prediction == nil {
+		return EventPayload{}, errors.New("prediction is required")
+	}
+
+	deviceID, _ := req.Prediction["device_id"].(string)
+	eventType, _ := req.Prediction["event_type"].(string)
+	location, _ := req.Prediction["location"].(string)
+	frameHash, _ := req.Prediction["frame_hash"].(string)
+	signature, _ := req.Prediction["signature"].(string)
+
+	if deviceID == "" {
+		return EventPayload{}, errors.New("prediction.device_id is required")
+	}
+	if eventType == "" {
+		return EventPayload{}, errors.New("prediction.event_type is required")
+	}
+
+	confidenceRaw, ok := req.Prediction["confidence"]
+	if !ok {
+		return EventPayload{}, errors.New("prediction.confidence is required")
+	}
+	confidence, err := toFloat64(confidenceRaw)
+	if err != nil {
+		return EventPayload{}, errors.New("prediction.confidence must be numeric")
+	}
+
+	payload := EventPayload{
+		DeviceID:   deviceID,
+		EventType:  eventType,
+		Confidence: confidence,
+		Location:   location,
+		FrameHash:  frameHash,
+		Signature:  signature,
+	}
+
+	if err := validateIngress(IngressRequest{APIKey: req.APIKey, Event: payload}); err != nil {
+		return EventPayload{}, err
+	}
+
+	return payload, nil
+}
+
+func toFloat64(value any) (float64, error) {
+	switch v := value.(type) {
+	case float64:
+		return v, nil
+	case float32:
+		return float64(v), nil
+	case int:
+		return float64(v), nil
+	case int64:
+		return float64(v), nil
+	case json.Number:
+		return v.Float64()
+	default:
+		return 0, errors.New("invalid numeric value")
+	}
 }
 
 func (a *App) forwardToAuthority(ctx context.Context, env SwarmEnvelope) error {
@@ -719,11 +862,17 @@ func (a *App) cleanupLoop(ctx context.Context) {
 }
 
 func (a *App) close() {
-	if a.sub != nil {
-		a.sub.Cancel()
+	if a.eventSub != nil {
+		a.eventSub.Cancel()
 	}
-	if a.topic != nil {
-		_ = a.topic.Close()
+	if a.predSub != nil {
+		a.predSub.Cancel()
+	}
+	if a.eventTopic != nil {
+		_ = a.eventTopic.Close()
+	}
+	if a.predTopic != nil {
+		_ = a.predTopic.Close()
 	}
 	if a.dht != nil {
 		_ = a.dht.Close()

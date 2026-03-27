@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Phase III integration test: edge -> swarm -> authority chain."""
+"""Phase IV integration test: edge + FL + predictive -> swarm -> authority chain."""
 
 import random
 import string
@@ -10,6 +10,8 @@ import requests
 
 AUTHORITY = "http://localhost:1317"
 EDGE = "http://localhost:8100"
+FL_AGGREGATOR = "http://localhost:8200"
+PREDICTIVE = "http://localhost:8300"
 
 
 class Colors:
@@ -93,6 +95,58 @@ def wait_for_authority_events(min_total, timeout=30):
     fail("events did not arrive from swarm to authority in time")
 
 
+def run_fl_once():
+    print_header("Verify federated learning endpoints")
+
+    status_res = requests.get(f"{EDGE}/fl/status", timeout=8)
+    if status_res.status_code != 200:
+        fail(f"edge FL status failed: {status_res.text}")
+    status = status_res.json()
+    print_info(f"edge FL enabled={status.get('enabled')} model_version={status.get('model_version')}")
+
+    latest_before_res = requests.get(f"{FL_AGGREGATOR}/fl/model/latest", timeout=8)
+    if latest_before_res.status_code != 200:
+        fail(f"FL aggregator latest model failed: {latest_before_res.text}")
+    latest_before = latest_before_res.json()
+
+    train_res = requests.post(f"{EDGE}/fl/train-once", timeout=12)
+    if train_res.status_code != 200:
+        fail(f"edge FL train-once failed: {train_res.text}")
+    print_ok("edge submitted one FL update")
+
+    latest_after_res = requests.get(f"{FL_AGGREGATOR}/fl/model/latest", timeout=8)
+    if latest_after_res.status_code != 200:
+        fail(f"FL aggregator latest model (after update) failed: {latest_after_res.text}")
+    latest_after = latest_after_res.json()
+
+    if latest_after.get("version", 0) < latest_before.get("version", 0):
+        fail("FL model version regressed")
+    print_ok(
+        f"FL aggregator reachable model version={latest_after.get('version')} pending integration active"
+    )
+
+
+def run_predictive_once(min_predictions=1):
+    print_header("Verify predictive analytics endpoints")
+
+    run_res = requests.post(f"{PREDICTIVE}/predictions/run-once", timeout=30)
+    if run_res.status_code != 200:
+        fail(f"predictive run-once failed: {run_res.text}")
+    run_data = run_res.json()
+    print_info(f"predictive generated={run_data.get('generated')} model_ready={run_data.get('model_ready')}")
+
+    latest_res = requests.get(f"{PREDICTIVE}/predictions/latest", timeout=8)
+    if latest_res.status_code != 200:
+        fail(f"predictive latest failed: {latest_res.text}")
+    latest = latest_res.json()
+    count = latest.get("count", 0)
+
+    if count < min_predictions:
+        fail(f"expected at least {min_predictions} prediction(s), got {count}")
+
+    print_ok(f"predictive service produced {count} alert(s)")
+
+
 def summarize(data):
     print_header("Event summary")
     events = data.get("events", [])
@@ -109,10 +163,12 @@ def summarize(data):
 
 
 def main():
-    print(f"\n{Colors.BOLD}{Colors.HEADER}=== GALAXY PHASE III AUTHORITY TEST ==={Colors.ENDC}")
+    print(f"\n{Colors.BOLD}{Colors.HEADER}=== GALAXY PHASE IV INTELLIGENCE TEST ==={Colors.ENDC}")
 
     wait_for_health(f"{AUTHORITY}/health", "authority")
     wait_for_health(f"{EDGE}/health", "edge-planet")
+    wait_for_health(f"{FL_AGGREGATOR}/health", "fl-aggregator")
+    wait_for_health(f"{PREDICTIVE}/health", "predictive-service")
 
     submitter = random_submitter()
     device_id = "planet-01"
@@ -120,6 +176,9 @@ def main():
     send_events_via_edge(submitter, device_id, count=8)
     data = wait_for_authority_events(min_total=8)
     summarize(data)
+
+    run_fl_once()
+    run_predictive_once(min_predictions=1)
 
     cosmos_res = requests.get(
         f"{AUTHORITY}/cosmos/tx/v1beta1/txs",
@@ -132,8 +191,8 @@ def main():
     if cosmos_res.status_code == 200:
         print_ok("Cosmos transaction query endpoint reachable")
 
-    print_ok("Phase III edge->swarm->authority flow verified")
-    print_warn("Optional: open dashboard and switch data source to Cosmos.")
+    print_ok("Phase IV edge->swarm->authority + FL + predictive flow verified")
+    print_warn("Optional: open dashboard to inspect predictive alerts in the Phase IV panel.")
 
 
 if __name__ == "__main__":
