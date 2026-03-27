@@ -14,6 +14,12 @@ export default function Dashboard() {
   const [wsConnected, setWsConnected] = useState(false);
   const [apiKey, setApiKey] = useState(localStorage.getItem('api_key') || '');
   const [dataSource, setDataSource] = useState(localStorage.getItem('data_source') || 'cosmos');
+  const [deviceForBalance, setDeviceForBalance] = useState(localStorage.getItem('economy_device_id') || 'planet-01');
+  const [tokenInfo, setTokenInfo] = useState({
+    wallet: '',
+    balance: 0,
+    staked: 0
+  });
 
   const normalizeFromCosmos = (payload) => {
     const txs = payload?.tx_responses || [];
@@ -102,6 +108,45 @@ export default function Dashboard() {
     }
   };
 
+  const fetchTokenBalance = async () => {
+    if (!deviceForBalance) {
+      return;
+    }
+    try {
+      const response = await fetch(`http://localhost:1317/economy/v1/balance/by-device/${encodeURIComponent(deviceForBalance)}`);
+      if (!response.ok) {
+        return;
+      }
+      const data = await response.json();
+      setTokenInfo({
+        wallet: data.wallet || '',
+        balance: Number(data.balance || 0),
+        staked: Number(data.staked || 0)
+      });
+    } catch (error) {
+      console.warn('Failed to fetch token balance:', error);
+    }
+  };
+
+  const handleStake = async () => {
+    if (!tokenInfo.wallet) {
+      return;
+    }
+
+    try {
+      const response = await fetch('http://localhost:1317/economy/v1/stake', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ wallet: tokenInfo.wallet, amount: 10 })
+      });
+      if (response.ok) {
+        fetchTokenBalance();
+      }
+    } catch (error) {
+      console.warn('Staking request failed:', error);
+    }
+  };
+
   // Poll for new events
   useEffect(() => {
     fetchEvents();
@@ -114,6 +159,13 @@ export default function Dashboard() {
     const interval = setInterval(fetchPredictions, 8000);
     return () => clearInterval(interval);
   }, []);
+
+  useEffect(() => {
+    fetchTokenBalance();
+    localStorage.setItem('economy_device_id', deviceForBalance);
+    const interval = setInterval(fetchTokenBalance, 12000);
+    return () => clearInterval(interval);
+  }, [deviceForBalance]);
 
   // WebSocket for real-time updates (optional)
   useEffect(() => {
@@ -267,6 +319,38 @@ export default function Dashboard() {
           <h3>High Risk Alerts</h3>
           <div className="stat-number">{stats.highRisk}</div>
         </div>
+      </section>
+
+      <section className="events">
+        <h2>Token Economy</h2>
+        <div className="actions" style={{justifyContent: 'flex-start', marginBottom: '1rem'}}>
+          <input
+            type="text"
+            value={deviceForBalance}
+            onChange={(e) => setDeviceForBalance(e.target.value)}
+            className="input-field"
+            style={{maxWidth: '260px', marginBottom: 0}}
+            placeholder="Device ID for balance"
+          />
+          <button className="btn btn-secondary" onClick={fetchTokenBalance}>Refresh Balance</button>
+          <button className="btn btn-primary" onClick={handleStake} disabled={!tokenInfo.wallet}>Stake 10 GALAXY</button>
+        </div>
+        <table className="events-table">
+          <thead>
+            <tr>
+              <th>Wallet</th>
+              <th>Available Balance</th>
+              <th>Staked</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><code>{tokenInfo.wallet || 'unregistered-device'}</code></td>
+              <td>{tokenInfo.balance} ugalaxy</td>
+              <td>{tokenInfo.staked} ugalaxy</td>
+            </tr>
+          </tbody>
+        </table>
       </section>
 
       <section className="events">

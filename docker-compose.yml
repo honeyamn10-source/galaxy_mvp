@@ -47,13 +47,20 @@ services:
       CHAIN_REST_ADDR: 0.0.0.0:1317
       CHAIN_RPC_ADDR: 0.0.0.0:26657
       CHAIN_REWARD_UGALAXY: 100
+      CHAIN_SUBMISSION_FEE_UGALAXY: 5
+      CHAIN_ALLOW_FEE_OVERDRAFT: "true"
       CHAIN_VOTE_WINDOW_SECONDS: 3600
+      CHAIN_COSMWASM_ENABLED: "true"
+      CHAIN_COMPLIANCE_URL: http://compliance-engine:8400
+      CHAIN_COMPLIANCE_TIMEOUT: 4s
     volumes:
       - authority_data:/data
     depends_on:
       postgres:
         condition: service_healthy
       redis:
+        condition: service_healthy
+      compliance-engine:
         condition: service_healthy
     healthcheck:
       test: ["CMD", "wget", "-qO-", "http://localhost:1317/health"]
@@ -205,7 +212,74 @@ services:
       timeout: 5s
       retries: 10
 
+  compliance-engine:
+    build: ./expansion-layer/compliance-engine
+    container_name: galaxy-compliance-engine
+    environment:
+      COMPLIANCE_DEFAULT_REGION: eu
+      COMPLIANCE_HIPAA_EVENT_TYPES: health_alert,patient_fall
+      COMPLIANCE_PII_KEYS: name,face_id,person_name
+      COMPLIANCE_ENCRYPTION_KEY: change-me-in-production
+      COMPLIANCE_AUDIT_LOG_PATH: /data/compliance-audit.jsonl
+      COMPLIANCE_DATABASE_URL: postgresql://postgres:postgres@postgres:5432/galaxy
+    ports:
+      - "8400:8400"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    volumes:
+      - compliance_data:/data
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:8400/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  webhook-service:
+    build: ./expansion-layer/webhook-service
+    container_name: galaxy-webhook-service
+    environment:
+      WEBHOOK_DATABASE_URL: postgresql://postgres:postgres@postgres:5432/galaxy
+      WEBHOOK_AUTHORITY_EVENTS_URL: http://authority-chain:1317/galaxy/v1/events
+      WEBHOOK_POLL_INTERVAL_SECONDS: 5
+      WEBHOOK_MAX_RETRIES: 4
+      WEBHOOK_BACKOFF_BASE_SECONDS: 0.5
+    ports:
+      - "8500:8500"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      authority-chain:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:8500/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  hermes-relayer:
+    image: informalsystems/hermes:v1.8.2
+    container_name: galaxy-hermes-relayer
+    profiles: ["ibc"]
+    environment:
+      RUST_LOG: info
+      HERMES_CONFIG: /config/config.toml
+    command: ["start", "-c", "/config/config.toml"]
+    volumes:
+      - ./expansion-layer/hermes/config.toml:/config/config.toml:ro
+      - hermes_data:/home/hermes/.hermes
+    depends_on:
+      authority-chain:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "sh", "-c", "hermes --version >/dev/null 2>&1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
 volumes:
   postgres_data:
   authority_data:
   fl_models:
+  compliance_data:
+  hermes_data:

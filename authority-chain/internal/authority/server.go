@@ -1,11 +1,13 @@
 package authority
 
 import (
+	"bytes"
 	"bufio"
 	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"log"
 	"net"
 	"net/http"
@@ -30,7 +32,12 @@ type Config struct {
 	VoteThreshold        uint64
 	VoteWindowSeconds    int64
 	RewardAmountUGalaxy  int64
+	SubmissionFeeUGalaxy int64
+	AllowFeeOverdraft    bool
 	AutoVerifyConfidence float64
+	ComplianceURL        string
+	ComplianceTimeout    time.Duration
+	CosmWasmEnabled      bool
 }
 
 type EventPayload struct {
@@ -57,6 +64,44 @@ type StoredEvent struct {
 	CreatedAt    string       `json:"created_at"`
 	UpdatedAt    string       `json:"updated_at"`
 	RewardUGalaxy int64       `json:"reward_ugalaxy"`
+	RewardPaid    bool        `json:"reward_paid"`
+}
+
+type EconomyState struct {
+	PlanetRegistry map[string]string `json:"planet_registry"`
+	Balances       map[string]int64  `json:"balances"`
+	Stakes         map[string]int64  `json:"stakes"`
+}
+
+type planetRegisterRequest struct {
+	DeviceID string `json:"device_id"`
+	Wallet   string `json:"wallet"`
+}
+
+type stakeRequest struct {
+	Wallet string `json:"wallet"`
+	Amount int64  `json:"amount"`
+}
+
+type slashRequest struct {
+	Wallet    string `json:"wallet"`
+	Amount    int64  `json:"amount"`
+	Reason    string `json:"reason"`
+	Validator string `json:"validator,omitempty"`
+}
+
+type cosmwasmInstantiateRequest struct {
+	CodeID int64             `json:"code_id"`
+	Label  string            `json:"label"`
+	Admin  string            `json:"admin,omitempty"`
+	Msg    map[string]any    `json:"msg"`
+}
+
+type cosmwasmContractInfo struct {
+	Address string `json:"address"`
+	CodeID  int64  `json:"code_id"`
+	Label   string `json:"label"`
+	Admin   string `json:"admin,omitempty"`
 }
 
 type submitEventRequest struct {
@@ -98,11 +143,14 @@ type Server struct {
 	restServer  *http.Server
 	rpcServer   *http.Server
 	persistPath string
+	economyPath string
 
 	mu          sync.Mutex
 	events      []StoredEvent
 	byEnvelope  map[string]int
 	byFrameHash map[string]int
+	economy     EconomyState
+	contracts   []cosmwasmContractInfo
 	subs        map[*websocket.Conn]struct{}
 }
 
@@ -116,7 +164,12 @@ func NewServerFromEnv() (*Server, error) {
 		VoteThreshold:        parseUintEnv("CHAIN_VOTE_THRESHOLD", 2),
 		VoteWindowSeconds:    parseInt64Env("CHAIN_VOTE_WINDOW_SECONDS", 3600),
 		RewardAmountUGalaxy:  parseInt64Env("CHAIN_REWARD_UGALAXY", 100),
+		SubmissionFeeUGalaxy: parseInt64Env("CHAIN_SUBMISSION_FEE_UGALAXY", 5),
+		AllowFeeOverdraft:    parseBoolEnv("CHAIN_ALLOW_FEE_OVERDRAFT", true),
 		AutoVerifyConfidence: parseFloatEnv("CHAIN_AUTO_VERIFY_CONFIDENCE", 0.90),
+		ComplianceURL:        strings.TrimSpace(os.Getenv("CHAIN_COMPLIANCE_URL")),
+		ComplianceTimeout:    parseDurationEnv("CHAIN_COMPLIANCE_TIMEOUT", 3*time.Second),
+		CosmWasmEnabled:      parseBoolEnv("CHAIN_COSMWASM_ENABLED", true),
 	}
 
 	if err := os.MkdirAll(cfg.DataDir, 0o755); err != nil {
@@ -126,12 +179,21 @@ func NewServerFromEnv() (*Server, error) {
 	s := &Server{
 		cfg:         cfg,
 		persistPath: filepath.Join(cfg.DataDir, "events.jsonl"),
+		economyPath: filepath.Join(cfg.DataDir, "economy.json"),
 		byEnvelope:  make(map[string]int),
 		byFrameHash: make(map[string]int),
+		economy: EconomyState{
+			PlanetRegistry: make(map[string]string),
+			Balances:       make(map[string]int64),
+			Stakes:         make(map[string]int64),
+		},
 		subs:        make(map[*websocket.Conn]struct{}),
 	}
 
 	if err := s.loadPersisted(); err != nil {
+		return nil, err
+	}
+	if err := s.loadEconomy(); err != nil {
 		return nil, err
 	}
 
@@ -153,6 +215,15 @@ func (s *Server) Start(ctx context.Context) error {
 	restMux.HandleFunc("/health", s.handleHealth)
 	restMux.HandleFunc("/galaxy/v1/events", s.handleGalaxyEvents)
 	restMux.HandleFunc("/cosmos/tx/v1beta1/txs", s.handleCosmosTxs)
+	restMux.HandleFunc("/economy/v1/planet/register", s.handlePlanetRegister)
+	restMux.HandleFunc("/economy/v1/balance/", s.handleWalletBalance)
+	restMux.HandleFunc("/economy/v1/balance/by-device/", s.handleDeviceBalance)
+	restMux.HandleFunc("/economy/v1/stake", s.handleStake)
+	restMux.HandleFunc("/economy/v1/unstake", s.handleUnstake)
+	restMux.HandleFunc("/economy/v1/slash", s.handleSlash)
+	restMux.HandleFunc("/economy/v1/state", s.handleEconomyState)
+	restMux.HandleFunc("/cosmwasm/wasm/v1/contracts", s.handleCosmWasmContracts)
+	restMux.HandleFunc("/cosmwasm/wasm/v1/tx/instantiate", s.handleCosmWasmInstantiate)
 	s.restServer = &http.Server{Addr: s.cfg.RESTAddr, Handler: restMux}
 
 	rpcMux := http.NewServeMux()
@@ -214,6 +285,21 @@ func (s *Server) SubmitEvent(ctx context.Context, req *submitEventRequest) (*sub
 		return &submitEventResponse{Code: 1, Message: "confidence must be between 0 and 1"}, nil
 	}
 
+	normalizedEvent := EventPayload{
+		DeviceID:   req.DeviceID,
+		EventType:  req.EventType,
+		Confidence: confidence,
+		Location:   req.Location,
+		FrameHash:  req.FrameHash,
+		Signature:  req.Signature,
+	}
+
+	if transformed, err := s.applyCompliance(ctx, req.Creator, normalizedEvent); err != nil {
+		return &submitEventResponse{Code: 1, Message: fmt.Sprintf("compliance failed: %v", err)}, nil
+	} else {
+		normalizedEvent = transformed
+	}
+
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -226,6 +312,18 @@ func (s *Server) SubmitEvent(ctx context.Context, req *submitEventRequest) (*sub
 	height := int64(len(s.events) + 1)
 	txhash := fmt.Sprintf("TX%012d", height)
 
+	if s.cfg.SubmissionFeeUGalaxy > 0 {
+		if s.economy.Balances[req.Creator] < s.cfg.SubmissionFeeUGalaxy {
+			if !s.cfg.AllowFeeOverdraft {
+				return &submitEventResponse{Code: 1, Message: "insufficient balance for submission fee"}, nil
+			}
+			log.Printf("submission fee skipped due to low balance creator=%s balance=%d fee=%d", req.Creator, s.economy.Balances[req.Creator], s.cfg.SubmissionFeeUGalaxy)
+		} else {
+			s.economy.Balances[req.Creator] -= s.cfg.SubmissionFeeUGalaxy
+			_ = s.persistEconomy()
+		}
+	}
+
 	e := StoredEvent{
 		Height:       height,
 		TxHash:       txhash,
@@ -233,14 +331,7 @@ func (s *Server) SubmitEvent(ctx context.Context, req *submitEventRequest) (*sub
 		Creator:      req.Creator,
 		EnvelopeID:   req.EnvelopeID,
 		OriginPeerID: req.OriginPeerID,
-		Event: EventPayload{
-			DeviceID:   req.DeviceID,
-			EventType:  req.EventType,
-			Confidence: confidence,
-			Location:   req.Location,
-			FrameHash:  req.FrameHash,
-			Signature:  req.Signature,
-		},
+		Event:         normalizedEvent,
 		VotesYes:      0,
 		VotesNo:       0,
 		Status:        "pending",
@@ -248,11 +339,13 @@ func (s *Server) SubmitEvent(ctx context.Context, req *submitEventRequest) (*sub
 		CreatedAt:     now.Format(time.RFC3339),
 		UpdatedAt:     now.Format(time.RFC3339),
 		RewardUGalaxy: s.cfg.RewardAmountUGalaxy,
+		RewardPaid:    false,
 	}
 
 	if e.Event.Confidence >= s.cfg.AutoVerifyConfidence {
 		e.VotesYes = s.cfg.VoteThreshold
 		e.Status = "verified"
+		s.applyRewardLocked(&e)
 	}
 
 	s.events = append(s.events, e)
@@ -296,6 +389,7 @@ func (s *Server) VoteEvent(ctx context.Context, req *voteEventRequest) (*voteEve
 	e.UpdatedAt = time.Now().UTC().Format(time.RFC3339)
 	if e.VotesYes >= s.cfg.VoteThreshold && e.VotesYes > e.VotesNo {
 		e.Status = "verified"
+		s.applyRewardLocked(&e)
 	}
 	s.events[idx] = e
 	_ = s.rewritePersisted()
@@ -326,6 +420,7 @@ func (s *Server) endBlockLoop(ctx context.Context) {
 				}
 				if e.VotesYes >= s.cfg.VoteThreshold && e.VotesYes > e.VotesNo {
 					e.Status = "verified"
+					s.applyRewardLocked(&e)
 				} else {
 					e.Status = "rejected"
 				}
@@ -348,13 +443,15 @@ func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	resp := map[string]any{
-		"status": "ok",
-		"service": "galaxyd",
-		"chain_id": s.cfg.ChainID,
-		"grpc_addr": s.cfg.GRPCAddr,
-		"rest_addr": s.cfg.RESTAddr,
-		"rpc_addr": s.cfg.RPCAddr,
-		"events": len(s.events),
+		"status":           "ok",
+		"service":          "galaxyd",
+		"chain_id":         s.cfg.ChainID,
+		"grpc_addr":        s.cfg.GRPCAddr,
+		"rest_addr":        s.cfg.RESTAddr,
+		"rpc_addr":         s.cfg.RPCAddr,
+		"events":           len(s.events),
+		"cosmwasm_enabled": s.cfg.CosmWasmEnabled,
+		"compliance_url":   s.cfg.ComplianceURL,
 	}
 	writeJSON(w, http.StatusOK, resp)
 }
@@ -445,6 +542,285 @@ func (s *Server) handleCosmosTxs(w http.ResponseWriter, r *http.Request) {
 		"txs": txs,
 		"pagination": map[string]string{"total": strconv.Itoa(len(s.events))},
 	})
+}
+
+func (s *Server) applyCompliance(ctx context.Context, tenant string, ev EventPayload) (EventPayload, error) {
+	if s.cfg.ComplianceURL == "" {
+		return ev, nil
+	}
+
+	payload := map[string]any{
+		"tenant": tenant,
+		"event":  ev,
+	}
+	bz, err := json.Marshal(payload)
+	if err != nil {
+		return EventPayload{}, err
+	}
+
+	reqCtx, cancel := context.WithTimeout(ctx, s.cfg.ComplianceTimeout)
+	defer cancel()
+
+	req, err := http.NewRequestWithContext(reqCtx, http.MethodPost, s.cfg.ComplianceURL+"/transform", bytes.NewReader(bz))
+	if err != nil {
+		return EventPayload{}, err
+	}
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return EventPayload{}, err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode >= 300 {
+		body, _ := io.ReadAll(io.LimitReader(resp.Body, 1024))
+		return EventPayload{}, fmt.Errorf("compliance status=%d body=%s", resp.StatusCode, strings.TrimSpace(string(body)))
+	}
+
+	var transformed struct {
+		Event EventPayload `json:"event"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&transformed); err != nil {
+		return EventPayload{}, err
+	}
+	return transformed.Event, nil
+}
+
+func (s *Server) applyRewardLocked(e *StoredEvent) {
+	if e.Status != "verified" || e.RewardPaid || e.RewardUGalaxy <= 0 {
+		return
+	}
+	wallet := s.economy.PlanetRegistry[e.Event.DeviceID]
+	if wallet == "" {
+		wallet = e.Creator
+	}
+	s.economy.Balances[wallet] += e.RewardUGalaxy
+	e.RewardPaid = true
+	_ = s.persistEconomy()
+}
+
+func (s *Server) handlePlanetRegister(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	var req planetRegisterRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "invalid json", http.StatusBadRequest)
+		return
+	}
+	if strings.TrimSpace(req.DeviceID) == "" || strings.TrimSpace(req.Wallet) == "" {
+		http.Error(w, "device_id and wallet are required", http.StatusBadRequest)
+		return
+	}
+
+	s.mu.Lock()
+	s.economy.PlanetRegistry[req.DeviceID] = req.Wallet
+	if _, ok := s.economy.Balances[req.Wallet]; !ok {
+		s.economy.Balances[req.Wallet] = 1000
+	}
+	err := s.persistEconomy()
+	s.mu.Unlock()
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	writeJSON(w, http.StatusOK, map[string]any{"status": "ok", "device_id": req.DeviceID, "wallet": req.Wallet})
+}
+
+func (s *Server) handleWalletBalance(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	wallet := strings.TrimSpace(strings.TrimPrefix(r.URL.Path, "/economy/v1/balance/"))
+	if wallet == "" {
+		http.Error(w, "wallet path parameter is required", http.StatusBadRequest)
+		return
+	}
+
+	s.mu.Lock()
+	balance := s.economy.Balances[wallet]
+	staked := s.economy.Stakes[wallet]
+	s.mu.Unlock()
+
+	writeJSON(w, http.StatusOK, map[string]any{"wallet": wallet, "balance": balance, "staked": staked})
+}
+
+func (s *Server) handleDeviceBalance(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	deviceID := strings.TrimSpace(strings.TrimPrefix(r.URL.Path, "/economy/v1/balance/by-device/"))
+	if deviceID == "" {
+		http.Error(w, "device_id path parameter is required", http.StatusBadRequest)
+		return
+	}
+
+	s.mu.Lock()
+	wallet := s.economy.PlanetRegistry[deviceID]
+	balance := int64(0)
+	staked := int64(0)
+	if wallet != "" {
+		balance = s.economy.Balances[wallet]
+		staked = s.economy.Stakes[wallet]
+	}
+	s.mu.Unlock()
+
+	writeJSON(w, http.StatusOK, map[string]any{
+		"device_id": deviceID,
+		"wallet":    wallet,
+		"balance":   balance,
+		"staked":    staked,
+	})
+}
+
+func (s *Server) handleStake(w http.ResponseWriter, r *http.Request) {
+	s.handleStakeAction(w, r, true)
+}
+
+func (s *Server) handleUnstake(w http.ResponseWriter, r *http.Request) {
+	s.handleStakeAction(w, r, false)
+}
+
+func (s *Server) handleStakeAction(w http.ResponseWriter, r *http.Request, stake bool) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	var req stakeRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "invalid json", http.StatusBadRequest)
+		return
+	}
+	req.Wallet = strings.TrimSpace(req.Wallet)
+	if req.Wallet == "" || req.Amount <= 0 {
+		http.Error(w, "wallet and positive amount are required", http.StatusBadRequest)
+		return
+	}
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if stake {
+		if s.economy.Balances[req.Wallet] < req.Amount {
+			http.Error(w, "insufficient balance", http.StatusBadRequest)
+			return
+		}
+		s.economy.Balances[req.Wallet] -= req.Amount
+		s.economy.Stakes[req.Wallet] += req.Amount
+	} else {
+		if s.economy.Stakes[req.Wallet] < req.Amount {
+			http.Error(w, "insufficient staked amount", http.StatusBadRequest)
+			return
+		}
+		s.economy.Stakes[req.Wallet] -= req.Amount
+		s.economy.Balances[req.Wallet] += req.Amount
+	}
+
+	if err := s.persistEconomy(); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"wallet": req.Wallet, "balance": s.economy.Balances[req.Wallet], "staked": s.economy.Stakes[req.Wallet]})
+}
+
+func (s *Server) handleSlash(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	var req slashRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "invalid json", http.StatusBadRequest)
+		return
+	}
+	req.Wallet = strings.TrimSpace(req.Wallet)
+	if req.Wallet == "" || req.Amount <= 0 {
+		http.Error(w, "wallet and positive amount are required", http.StatusBadRequest)
+		return
+	}
+
+	s.mu.Lock()
+	if s.economy.Stakes[req.Wallet] < req.Amount {
+		s.mu.Unlock()
+		http.Error(w, "insufficient staked amount", http.StatusBadRequest)
+		return
+	}
+	s.economy.Stakes[req.Wallet] -= req.Amount
+	err := s.persistEconomy()
+	remaining := s.economy.Stakes[req.Wallet]
+	s.mu.Unlock()
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	log.Printf("stake slashed wallet=%s amount=%d validator=%s reason=%s", req.Wallet, req.Amount, req.Validator, req.Reason)
+	writeJSON(w, http.StatusOK, map[string]any{"wallet": req.Wallet, "staked": remaining, "slashed": req.Amount})
+}
+
+func (s *Server) handleEconomyState(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	s.mu.Lock()
+	state := s.economy
+	s.mu.Unlock()
+	writeJSON(w, http.StatusOK, state)
+}
+
+func (s *Server) handleCosmWasmContracts(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	if !s.cfg.CosmWasmEnabled {
+		http.Error(w, "cosmwasm disabled", http.StatusNotImplemented)
+		return
+	}
+
+	s.mu.Lock()
+	contracts := make([]cosmwasmContractInfo, len(s.contracts))
+	copy(contracts, s.contracts)
+	s.mu.Unlock()
+
+	writeJSON(w, http.StatusOK, map[string]any{"contracts": contracts})
+}
+
+func (s *Server) handleCosmWasmInstantiate(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	if !s.cfg.CosmWasmEnabled {
+		http.Error(w, "cosmwasm disabled", http.StatusNotImplemented)
+		return
+	}
+
+	var req cosmwasmInstantiateRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "invalid json", http.StatusBadRequest)
+		return
+	}
+	if req.CodeID <= 0 || strings.TrimSpace(req.Label) == "" {
+		http.Error(w, "code_id and label are required", http.StatusBadRequest)
+		return
+	}
+
+	s.mu.Lock()
+	addr := fmt.Sprintf("galaxy1contract%06d", len(s.contracts)+1)
+	contract := cosmwasmContractInfo{Address: addr, CodeID: req.CodeID, Label: req.Label, Admin: req.Admin}
+	s.contracts = append(s.contracts, contract)
+	s.mu.Unlock()
+
+	writeJSON(w, http.StatusOK, map[string]any{"address": addr, "code_id": req.CodeID, "label": req.Label})
 }
 
 var upgrader = websocket.Upgrader{CheckOrigin: func(r *http.Request) bool { return true }}
@@ -573,6 +949,42 @@ func (s *Server) rewritePersisted() error {
 	return nil
 }
 
+func (s *Server) loadEconomy() error {
+	bz, err := os.ReadFile(s.economyPath)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return s.persistEconomy()
+		}
+		return fmt.Errorf("read economy state: %w", err)
+	}
+
+	var state EconomyState
+	if err := json.Unmarshal(bz, &state); err != nil {
+		return fmt.Errorf("decode economy state: %w", err)
+	}
+
+	if state.PlanetRegistry == nil {
+		state.PlanetRegistry = make(map[string]string)
+	}
+	if state.Balances == nil {
+		state.Balances = make(map[string]int64)
+	}
+	if state.Stakes == nil {
+		state.Stakes = make(map[string]int64)
+	}
+
+	s.economy = state
+	return nil
+}
+
+func (s *Server) persistEconomy() error {
+	bz, err := json.MarshalIndent(s.economy, "", "  ")
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(s.economyPath, bz, 0o644)
+}
+
 type jsonCodec struct{}
 
 func (jsonCodec) Name() string { return "json" }
@@ -675,4 +1087,31 @@ func parseFloatEnv(key string, fallback float64) float64 {
 		return fallback
 	}
 	return n
+}
+
+func parseBoolEnv(key string, fallback bool) bool {
+	v := strings.TrimSpace(strings.ToLower(os.Getenv(key)))
+	if v == "" {
+		return fallback
+	}
+	switch v {
+	case "1", "true", "yes", "y", "on":
+		return true
+	case "0", "false", "no", "n", "off":
+		return false
+	default:
+		return fallback
+	}
+}
+
+func parseDurationEnv(key string, fallback time.Duration) time.Duration {
+	v := strings.TrimSpace(os.Getenv(key))
+	if v == "" {
+		return fallback
+	}
+	d, err := time.ParseDuration(v)
+	if err != nil {
+		return fallback
+	}
+	return d
 }

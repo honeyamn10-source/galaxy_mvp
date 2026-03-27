@@ -1,0 +1,47 @@
+[global]
+log_level = 'info'
+
+[mode]
+clients.enabled = true
+clients.refresh = true
+clients.misbehaviour = true
+connections.enabled = true
+channels.enabled = true
+packets.enabled = true
+packets.clear_interval = 100
+packets.clear_on_start = true
+packets.tx_confirmation = true
+
+[[chains]]
+id = 'galaxy-1'
+rpc_addr = 'http://authority-chain:26657'
+grpc_addr = 'http://authority-chain:9090'
+websocket_addr = 'ws://authority-chain:26657/websocket'
+rpc_timeout = '10s'
+account_prefix = 'galaxy'
+key_name = 'galaxy-relayer'
+store_prefix = 'ibc'
+default_gas = 200000
+gas_multiplier = 1.2
+max_gas = 3000000
+clock_drift = '5s'
+max_block_time = '30s'
+trusting_period = '10days'
+trust_threshold = { numerator = '1', denominator = '3' }
+
+[[chains]]
+id = 'osmo-test-5'
+rpc_addr = 'https://rpc.osmotest5.osmosis.zone:443'
+grpc_addr = 'https://grpc.osmotest5.osmosis.zone:443'
+websocket_addr = 'wss://rpc.osmotest5.osmosis.zone/websocket'
+rpc_timeout = '10s'
+account_prefix = 'osmo'
+key_name = 'osmo-relayer'
+store_prefix = 'ibc'
+default_gas = 300000
+gas_multiplier = 1.3
+max_gas = 5000000
+clock_drift = '5s'
+max_block_time = '30s'
+trusting_period = '10days'
+trust_threshold = { numerator = '1', denominator = '3' }
