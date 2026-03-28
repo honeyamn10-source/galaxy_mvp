@@ -224,7 +224,6 @@ func newApp(ctx context.Context, cfg Config) (*App, error) {
 		libp2p.Security(libp2ptls.ID, libp2ptls.New),
 		libp2p.NATPortMap(),
 		libp2p.EnableRelay(),
-		libp2p.EnableAutoRelay(),
 		libp2p.EnableHolePunching(),
 	)
 	if err != nil {
