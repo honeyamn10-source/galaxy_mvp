@@ -147,7 +147,8 @@ def _maybe_aggregate() -> None:
             logger.warning("Skipping update from %s due to mismatched shape", update["client_id"])
             continue
         weighted += w * (update["sample_count"] / total_samples)
-aggregation_counter.inc()
+    
+    aggregation_counter.inc()
     model_version_gauge.set(current_version)
     
     current_version += 1
