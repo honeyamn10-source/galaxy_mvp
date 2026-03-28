@@ -1,0 +1,116 @@
+name: Security - Vulnerability Scanning
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main, develop ]
+  schedule:
+    # Run daily at 2 AM UTC
+    - cron: '0 2 * * *'
+
+jobs:
+  trivy-image-scan:
+    name: Trivy Image Scan
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        service:
+          - edge-planet
+          - backend
+          - authority-chain
+          - swarm-node
+          - fl-aggregator
+          - predictive-service
+          - webhook-service
+          - compliance-engine
+    
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Build image for scanning
+        run: |
+          SERVICE_PATH=$(find . -name "${{ matrix.service }}" -type d | head -1)
+          docker build -f "$SERVICE_PATH/Dockerfile" -t "${{ matrix.service }}:scan" "$SERVICE_PATH"
+      
+      - name: Run Trivy vulnerability scanner
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: '${{ matrix.service }}:scan'
+          format: 'sarif'
+          output: 'trivy-${{ matrix.service }}.sarif'
+        continue-on-error: true
+      
+      - name: Upload Trivy results to GitHub Security
+        uses: github/codeql-action/upload-sarif@v2
+        if: always()
+        with:
+          sarif_file: 'trivy-${{ matrix.service }}.sarif'
+          category: 'trivy-${{ matrix.service }}'
+        continue-on-error: true
+
+  trivy-repo-scan:
+    name: Trivy Repository Scan
+    runs-on: ubuntu-latest
+    
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Run Trivy filesystem scan
+        uses: aquasecurity/trivy-action@master
+        with:
+          scan-type: 'fs'
+          scan-ref: '.'
+          format: 'sarif'
+          output: 'trivy-repo.sarif'
+        continue-on-error: true
+      
+      - name: Upload to GitHub Security
+        uses: github/codeql-action/upload-sarif@v2
+        if: always()
+        with:
+          sarif_file: 'trivy-repo.sarif'
+          category: 'trivy-fs'
+        continue-on-error: true
+
+  dependency-check:
+    name: OWASP Dependency Check
+    runs-on: ubuntu-latest
+    
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Run dependency-check
+        uses: dependency-check/Dependency-Check_Action@main
+        with:
+          path: '.'
+          format: 'JSON'
+          args: >
+            --enable-retired
+        continue-on-error: true
+
+  codeql:
+    name: CodeQL Analysis
+    runs-on: ubuntu-latest
+    
+    permissions:
+      security-events: write
+    
+    strategy:
+      matrix:
+        language: [ 'python', 'go' ]
+    
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@v2
+        with:
+          languages: ${{ matrix.language }}
+      
+      - name: Autobuild
+        uses: github/codeql-action/autobuild@v2
+      
+      - name: Perform CodeQL Analysis
+        uses: github/codeql-action/analyze@v2
+        continue-on-error: true
