@@ -65,7 +65,7 @@ services:
       compliance-engine:
         condition: service_healthy
     healthcheck:
-      test: ["CMD", "wget", "-qO-", "http://localhost:1317/health"]
+      test: ["CMD", "curl", "-f", "http://localhost:1317/health"]
       interval: 10s
       timeout: 5s
       retries: 10
@@ -97,7 +97,7 @@ services:
     volumes:
       - ./infra/certs/dev:/certs:ro
     healthcheck:
-      test: ["CMD", "wget", "-qO-", "http://localhost:8081/healthz"]
+      test: ["CMD", "curl", "-f", "http://localhost:8081/healthz"]
       interval: 10s
       timeout: 5s
       retries: 10
@@ -129,7 +129,7 @@ services:
     volumes:
       - ./infra/certs/dev:/certs:ro
     healthcheck:
-      test: ["CMD", "wget", "-qO-", "http://localhost:8081/healthz"]
+      test: ["CMD", "curl", "-f", "http://localhost:8081/healthz"]
       interval: 10s
       timeout: 5s
       retries: 10
@@ -181,7 +181,7 @@ services:
       postgres:
         condition: service_healthy
     healthcheck:
-      test: ["CMD", "wget", "-qO-", "http://localhost:8200/health"]
+      test: ["CMD", "curl", "-f", "http://localhost:8200/health"]
       interval: 10s
       timeout: 5s
       retries: 10
@@ -209,7 +209,7 @@ services:
       swarm-node-1:
         condition: service_healthy
     healthcheck:
-      test: ["CMD", "wget", "-qO-", "http://localhost:8300/health"]
+      test: ["CMD", "curl", "-f", "http://localhost:8300/health"]
       interval: 10s
       timeout: 5s
       retries: 10
@@ -232,7 +232,7 @@ services:
     volumes:
       - compliance_data:/data
     healthcheck:
-      test: ["CMD", "wget", "-qO-", "http://localhost:8400/health"]
+      test: ["CMD", "curl", "-f", "http://localhost:8400/health"]
       interval: 10s
       timeout: 5s
       retries: 10
@@ -254,7 +254,7 @@ services:
       authority-chain:
         condition: service_healthy
     healthcheck:
-      test: ["CMD", "wget", "-qO-", "http://localhost:8500/health"]
+      test: ["CMD", "curl", "-f", "http://localhost:8500/health"]
       interval: 10s
       timeout: 5s
       retries: 10
@@ -280,7 +280,7 @@ services:
     ports:
       - "8600:8600"
     healthcheck:
-      test: ["CMD", "wget", "-qO-", "http://localhost:8600/health"]
+      test: ["CMD", "curl", "-f", "http://localhost:8600/health"]
       interval: 30s
       timeout: 10s
       retries: 5
