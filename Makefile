@@ -52,7 +52,7 @@ logs:
 
 test:
 	@echo "🧪 Running Phase V integration tests..."
-	python3 test-phase1.py
+	python3 test-phase-v.py
 
 phase-v-test: test
 
@@ -72,8 +72,8 @@ swarm-down:
 	@echo "✓ Stopped"
 
 swarm-test: swarm-up
-	@echo "🧪 Running Phase V swarm integration tests..."
-	python3 test-phase1.py
+	@echo "🧪 Running Phase V end-to-end tests..."
+	python3 test-phase-v.py
 
 contracts-test:
 	@echo "🧪 Running CosmWasm contract tests..."
