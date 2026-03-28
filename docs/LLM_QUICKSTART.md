@@ -1,5 +1,7 @@
 # LLM Service Integration – Quick Start Guide
 
+For full platform architecture and phase-by-phase operations, see [README.md](../README.md).
+
 ## Overview
 
 The Galaxy MVP now includes an **LLM Service** that enhances event verification using a locally-running DeepSeek 6.7B model via Ollama. This guide provides a quick start before reading the full documentation.
