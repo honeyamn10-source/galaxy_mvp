@@ -7,9 +7,10 @@ from collections import deque
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Deque, Dict, List, Tuple
+from typing import Deque, Dict, List, Optional, Tuple
 
 import grpc
+import requests
 from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
 from pydantic import BaseModel, Field
 
@@ -29,6 +30,10 @@ EVENT_LOG = DATA_DIR / "events.jsonl"
 MAX_IN_MEMORY = int(os.getenv("AUTHORITY_MAX_MEMORY_EVENTS", "10000"))
 VOTE_THRESHOLD = int(os.getenv("AUTHORITY_VOTE_THRESHOLD", "2"))
 GRPC_ADDR = os.getenv("AUTHORITY_GRPC_ADDR", "0.0.0.0:9090")
+
+# LLM Service configuration (optional)
+LLM_SERVICE_URL = os.getenv("LLM_SERVICE_URL", "").strip()
+LLM_TIMEOUT = int(os.getenv("LLM_TIMEOUT", "30"))
 
 store: Deque[Dict] = deque(maxlen=MAX_IN_MEMORY)
 subscribers: List[WebSocket] = []
@@ -107,6 +112,65 @@ def _validate_submission(payload: Dict) -> Tuple[str, str, str, Dict]:
     return submitter, envelope_id, origin_peer_id, event
 
 
+def call_llm_verifier(event: Dict) -> Optional[Dict]:
+    """
+    Call the LLM service to analyze the event for authenticity.
+
+    Args:
+        event: The event dictionary with device_id, event_type, confidence, etc.
+
+    Returns:
+        A dict with 'verdict' ('genuine'/'suspicious') and 'confidence' (float),
+        or None if LLM service is unavailable or disabled.
+    """
+    if not LLM_SERVICE_URL:
+        return None
+
+    try:
+        url = f"{LLM_SERVICE_URL}/analyze_event"
+        payload = {
+            "event_type": event.get("event_type", "unknown"),
+            "confidence": float(event.get("confidence", 0.5)),
+            "device_id": event.get("device_id"),
+            "frame_hash": event.get("frame_hash"),
+            "location": event.get("location"),
+            "context": None,
+        }
+
+        logger.debug("Calling LLM verifier at %s", url)
+
+        response = requests.post(
+            url,
+            json=payload,
+            timeout=LLM_TIMEOUT,
+        )
+        response.raise_for_status()
+
+        data = response.json()
+        return {
+            "verdict": data.get("verdict", ""),
+            "confidence": float(data.get("confidence", 0.5)),
+            "analysis": data.get("analysis", ""),
+            "reasoning": data.get("reasoning", ""),
+        }
+
+    except requests.exceptions.Timeout:
+        logger.warning(
+            "LLM service timed out after %d seconds. Using confidence threshold.",
+            LLM_TIMEOUT,
+        )
+        return None
+    except requests.exceptions.ConnectionError:
+        logger.warning(
+            "LLM service at %s is unavailable. Using confidence threshold.",
+            LLM_SERVICE_URL,
+        )
+        return None
+    except Exception as e:
+        logger.warning("Error calling LLM service: %s. Using confidence threshold.", e)
+        return None
+
+
 def ingest_submission(payload: Dict) -> Dict:
     submitter, envelope_id, origin_peer_id, event = _validate_submission(payload)
 
@@ -124,6 +188,29 @@ def ingest_submission(payload: Dict) -> Dict:
         height = len(store) + 1
         tx_hash = f"TX{height:012d}"
 
+        # Initial status based on confidence
+        confidence = float(event.get("confidence", 0.5))
+        status = "verified" if confidence >= 0.8 else "pending"
+        llm_verdict = None
+        llm_analysis = None
+
+        # Try to enhance verification with LLM service
+        llm_result = call_llm_verifier(event)
+        if llm_result:
+            llm_verdict = llm_result.get("verdict", "").lower()
+            llm_analysis = llm_result.get("reasoning", "")
+            logger.info(
+                "LLM verdict for event %s: %s (confidence: %.2f)",
+                envelope_id,
+                llm_verdict,
+                llm_result.get("confidence", 0),
+            )
+
+            # If LLM says it's suspicious, downgrade to pending/rejected
+            if llm_verdict == "suspicious":
+                status = "pending"
+                logger.debug("Event marked as suspicious by LLM verifier")
+
         event_doc = {
             "height": height,
             "tx_hash": tx_hash,
@@ -133,8 +220,10 @@ def ingest_submission(payload: Dict) -> Dict:
             "event": event,
             "votes_yes": max(VOTE_THRESHOLD, 1),
             "votes_no": 0,
-            "status": "verified" if float(event["confidence"]) >= 0.8 else "pending",
+            "status": status,
             "created_at": now,
+            "llm_verdict": llm_verdict,
+            "llm_analysis": llm_analysis,
         }
 
         store.append(event_doc)
@@ -307,11 +396,21 @@ async def broadcast_tendermint(event_doc: Dict) -> None:
 
 @app.get("/health")
 def health() -> Dict:
+    llm_available = False
+    if LLM_SERVICE_URL:
+        try:
+            response = requests.get(f"{LLM_SERVICE_URL}/health", timeout=2)
+            llm_available = response.status_code == 200
+        except Exception:
+            pass
+
     return {
         "status": "ok",
         "service": "constellation-authority-gateway",
         "events": len(store),
         "grpc_addr": GRPC_ADDR,
+        "llm_service_url": LLM_SERVICE_URL or "disabled",
+        "llm_available": llm_available,
     }
 
 

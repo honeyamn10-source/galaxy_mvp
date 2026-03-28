@@ -20,6 +20,12 @@ export default function Dashboard() {
     balance: 0,
     staked: 0
   });
+  
+  // Chat widget state
+  const [chatMessages, setChatMessages] = useState([]);
+  const [chatInput, setChatInput] = useState('');
+  const [chatLoading, setChatLoading] = useState(false);
+  const [chatExpanded, setChatExpanded] = useState(false);
 
   const normalizeFromCosmos = (payload) => {
     const txs = payload?.tx_responses || [];
@@ -144,6 +150,35 @@ export default function Dashboard() {
       }
     } catch (error) {
       console.warn('Staking request failed:', error);
+    }
+  };
+
+  const handleChatSend = async () => {
+    if (!chatInput.trim()) return;
+
+    const userMessage = chatInput;
+    setChatInput('');
+    setChatMessages(prev => [...prev, { role: 'user', text: userMessage }]);
+    setChatLoading(true);
+
+    try {
+      const response = await fetch('http://localhost:8600/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ question: userMessage })
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        setChatMessages(prev => [...prev, { role: 'assistant', text: data.answer }]);
+      } else {
+        setChatMessages(prev => [...prev, { role: 'assistant', text: 'Error: LLM service unavailable' }]);
+      }
+    } catch (error) {
+      console.error('Chat request failed:', error);
+      setChatMessages(prev => [...prev, { role: 'assistant', text: 'Connection error. Ensure LLM service is running.' }]);
+    } finally {
+      setChatLoading(false);
     }
   };
 
@@ -425,6 +460,73 @@ export default function Dashboard() {
             </tbody>
           </table>
         )}
+      </section>
+
+      <section className="events">
+        <h2>🤖 LLM Chat Assistant</h2>
+        <div className="chat-widget" style={{
+          border: '1px solid #ddd',
+          borderRadius: '8px',
+          padding: '1rem',
+          backgroundColor: '#f9f9f9',
+          maxHeight: chatExpanded ? '500px' : '300px',
+          display: 'flex',
+          flexDirection: 'column',
+          overflow: 'hidden'
+        }}>
+          <div style={{
+            flex: 1,
+            overflowY: 'auto',
+            marginBottom: '1rem',
+            paddingRight: '0.5rem'
+          }}>
+            {chatMessages.length === 0 ? (
+              <p style={{color: '#999', fontStyle: 'italic'}}>Ask a question about events, security, or the Galaxy system...</p>
+            ) : (
+              chatMessages.map((msg, idx) => (
+                <div key={idx} style={{
+                  marginBottom: '0.75rem',
+                  padding: '0.5rem',
+                  borderRadius: '4px',
+                  backgroundColor: msg.role === 'user' ? '#e3f2fd' : '#f5f5f5'
+                }}>
+                  <strong>{msg.role === 'user' ? 'You' : 'LLM'}:</strong> {msg.text}
+                </div>
+              ))
+            )}
+            {chatLoading && <div style={{color: '#999'}}>LLM thinking...</div>}
+          </div>
+          <div style={{display: 'flex', gap: '0.5rem'}}>
+            <input
+              type="text"
+              value={chatInput}
+              onChange={(e) => setChatInput(e.target.value)}
+              onKeyPress={(e) => e.key === 'Enter' && handleChatSend()}
+              placeholder="Ask something..."
+              className="input-field"
+              disabled={chatLoading}
+              style={{flex: 1, marginBottom: 0}}
+            />
+            <button
+              onClick={handleChatSend}
+              className="btn btn-primary"
+              disabled={chatLoading || !chatInput.trim()}
+              style={{minWidth: '80px'}}
+            >
+              Send
+            </button>
+            <button
+              onClick={() => setChatExpanded(!chatExpanded)}
+              className="btn btn-secondary"
+              style={{minWidth: '60px'}}
+            >
+              {chatExpanded ? 'Collapse' : 'Expand'}
+            </button>
+          </div>
+        </div>
+        <p style={{fontSize: '0.85rem', color: '#666', marginTop: '0.5rem'}}>
+          💡 This chat is powered by DeepSeek LLM (6.7B) running locally via Ollama.
+        </p>
       </section>
 
       <section className="actions">
