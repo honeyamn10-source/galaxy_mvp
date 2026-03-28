@@ -1,5 +1,7 @@
 # 🚀 Galaxy Phase I - Quick Reference
 
+> Looking for the full end-to-end guide across all phases (I-VI + LLM)? See [README.md](README.md).
+
 ## One-Liner Setup
 
 ```bash
