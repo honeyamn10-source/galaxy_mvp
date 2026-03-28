@@ -40,7 +40,7 @@ setup:
 
 up:
 	@echo "🚀 Starting services..."
-	docker-compose up -d
+	docker compose up -d
 	@echo "⏳ Waiting for services to initialize..."
 	sleep 5
 	@echo "✓ Services running!"
@@ -53,11 +53,11 @@ up:
 
 down:
 	@echo "🛑 Stopping services..."
-	docker-compose down
+	docker compose down
 	@echo "✓ Stopped"
 
 logs:
-	docker-compose logs -f authority-chain swarm-node-1 swarm-node-2 edge-planet fl-aggregator predictive-service webhook-service compliance-engine
+	docker compose logs -f authority-chain swarm-node-1 swarm-node-2 edge-planet fl-aggregator predictive-service webhook-service compliance-engine
 
 test:
 	@echo "🧪 Running Phase V integration tests..."
@@ -72,12 +72,12 @@ swarm-certs:
 
 swarm-up: swarm-certs
 	@echo "🚀 Starting full Phase V stack..."
-	docker-compose up -d --build
+	docker compose up -d --build
 	@echo "✓ Phase V services starting"
 
 swarm-down:
 	@echo "🛑 Stopping Phase V stack..."
-	docker-compose down
+	docker compose down
 	@echo "✓ Stopped"
 
 swarm-test: swarm-up
@@ -90,7 +90,7 @@ contracts-test:
 
 ibc-up:
 	@echo "🌉 Starting Hermes relayer profile..."
-	docker-compose --profile ibc up -d hermes-relayer
+	docker compose --profile ibc up -d hermes-relayer
 
 chain-unit-test:
 	@echo "🧪 Running authority-chain unit tests..."
@@ -98,13 +98,13 @@ chain-unit-test:
 
 clean:
 	@echo "🧹 Cleaning up (removing volumes)..."
-	docker-compose down -v
+	docker compose down -v
 	@echo "✓ Cleaned"
 
 rebuild:
 	@echo "🔨 Rebuilding from scratch..."
-	docker-compose down -v
-	docker-compose up -d --build
+	docker compose down -v
+	docker compose up -d --build
 	@echo "✓ Rebuilt"
 
 db:
@@ -114,7 +114,7 @@ redis:
 	docker exec -it galaxy-redis redis-cli
 
 ps:
-	docker-compose ps
+	docker compose ps
 
 health:
 	curl -s http://localhost:1317/health
@@ -141,14 +141,14 @@ ollama-down:
 
 llm-up:
 	@echo "🤖 Starting LLM service..."
-	docker-compose up -d llm-service
+	docker compose up -d llm-service
 	@echo "⏳ Waiting for LLM service to initialize..."
 	sleep 3
 	@echo "✓ LLM service running at http://localhost:8600"
 
 llm-down:
 	@echo "🛑 Stopping LLM service..."
-	docker-compose down llm-service
+	docker compose down llm-service
 	@echo "✓ LLM service stopped"
 
 test-llm:

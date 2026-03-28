@@ -1,24 +1,14 @@
 FROM golang:1.22-alpine AS builder
 
-WORKDIR /src
-COPY go.mod ./
+WORKDIR /app
+COPY go.mod go.sum ./
 RUN go mod download
 COPY . .
-RUN CGO_ENABLED=0 GOOS=linux go build -o /out/galaxyd ./cmd/galaxyd
+RUN CGO_ENABLED=0 GOOS=linux go build -o authority-chain .
 
 FROM alpine:3.20
-RUN adduser -D -u 10001 chain && apk add --no-cache ca-certificates wget
+RUN adduser -D -u 10001 chain && apk add --no-cache curl
+COPY --from=builder /app/authority-chain /usr/local/bin/
 USER chain
-WORKDIR /chain
-
-ENV CHAIN_ID=galaxy-1
-ENV CHAIN_DATA_DIR=/data
-ENV CHAIN_REST_ADDR=0.0.0.0:1317
-ENV CHAIN_GRPC_ADDR=0.0.0.0:9090
-ENV CHAIN_RPC_ADDR=0.0.0.0:26657
-
-VOLUME ["/data"]
-EXPOSE 1317 9090 26657
-
-COPY --from=builder /out/galaxyd /chain/galaxyd
-ENTRYPOINT ["/chain/galaxyd"]
+EXPOSE 9090 1317 26657
+CMD ["authority-chain"]
