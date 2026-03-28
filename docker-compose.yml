@@ -53,6 +53,8 @@ services:
       CHAIN_COSMWASM_ENABLED: "true"
       CHAIN_COMPLIANCE_URL: http://compliance-engine:8400
       CHAIN_COMPLIANCE_TIMEOUT: 4s
+      LLM_SERVICE_URL: http://llm-service:8600
+      LLM_TIMEOUT: "30"
     volumes:
       - authority_data:/data
     depends_on:
@@ -256,6 +258,34 @@ services:
       interval: 10s
       timeout: 5s
       retries: 10
+
+  # LLM Service - wraps Ollama API for event analysis and chat
+  # Prerequisites: Ollama running (host or container) with deepseek-llm:6.7b pulled
+  # On Docker Desktop: use 'host.docker.internal:11434' for host Ollama
+  # On Linux: use '172.17.0.1:11434' for gateway IP, or run Ollama in a container and link it
+  llm-service:
+    build: ./llm-service
+    container_name: galaxy-llm-service
+    environment:
+      # Point to Ollama running on the host (Docker Desktop)
+      # For Linux host, use '172.17.0.1:11434' or run Ollama in a container
+      # For Ollama container on same network, use 'ollama:11434'
+      OLLAMA_URL: http://host.docker.internal:11434
+      OLLAMA_MODEL: deepseek-llm:6.7b
+      OLLAMA_TIMEOUT: "60"
+      LLM_ENABLED: "true"
+      LLM_PORT: "8600"
+      LLM_HOST: "0.0.0.0"
+      LOG_LEVEL: "INFO"
+    ports:
+      - "8600:8600"
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:8600/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+    # Note: The LLM service doesn't depend on other services; it can start independently
+    # Comment out this section if running Ollama on the host via Docker Desktop
 
   hermes-relayer:
     image: informalsystems/hermes:v1.8.2

@@ -172,6 +172,7 @@ docker-compose ps
 - `backend/main.py` - FastAPI routes
 - `backend/database.py` - Data models
 - `frontend/Dashboard.js` - React UI
+- `docs/LLM_INTEGRATION.md` - LLM service setup (NEW)
 
 ## What's Running?
 
@@ -179,14 +180,42 @@ docker-compose ps
 - **Redis:** :6379 (real-time messaging)
 - **FastAPI:** :8000 (API server)
 - **Docs:** :8000/docs (interactive API docs)
+- **Ollama:** :11434 (LLM inference, optional)
+- **LLM Service:** :8600 (event analysis & chat, optional)
+
+## LLM Service (Optional AI Enhancement)
+
+The system now includes an **LLM service** for AI-powered event verification and chat:
+
+```bash
+# 1. Start Ollama (if not already running):
+ollama serve
+
+# In another terminal, pull the model:
+ollama pull deepseek-llm:6.7b
+
+# 2. Start Galaxy with LLM enabled:
+docker-compose up -d
+
+# 3. Test the integration:
+bash test-llm.sh
+
+# 4. Try the chat assistant:
+curl -X POST http://localhost:8600/chat \
+  -H "Content-Type: application/json" \
+  -d '{"question": "What is event verification?"}'
+```
+
+See **`docs/LLM_QUICKSTART.md`** for quick setup or **`docs/LLM_INTEGRATION.md`** for full documentation.
 
 ## Performance
 
 - **Create tenant:** ~100ms
 - **Register device:** ~50ms
-- **Submit event:** ~50ms
+- **Submit event:** ~50ms (with LLM: ~2-30s depending on inference)
 - **Query events:** <100ms
 - **WebSocket latency:** <10ms
+- **LLM event analysis:** 5-30s (depending on CPU/GPU)
 
 ## Next Phase (II)
 
