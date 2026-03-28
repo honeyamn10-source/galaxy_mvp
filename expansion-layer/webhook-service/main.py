@@ -9,6 +9,7 @@ import psycopg2
 import requests
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel, Field
+from prometheus_client import Counter, Gauge, generate_latest
 
 logging.basicConfig(level=os.getenv("LOG_LEVEL", "INFO"))
 logger = logging.getLogger("webhook-service")
@@ -30,6 +31,11 @@ _stop = threading.Event()
 _worker: threading.Thread | None = None
 _seen_tx: set[str] = set()
 _debug_received: list[dict[str, Any]] = []
+
+# Prometheus metrics
+deliveries_success_counter = Counter('webhook_service_deliveries_success_total', 'Total successful webhook deliveries')
+deliveries_failed_counter = Counter('webhook_service_deliveries_failed_total', 'Total failed webhook deliveries')
+dead_letters_counter = Counter('webhook_service_dead_letters_total', 'Total dead-lettered webhooks')
 
 
 class WebhookRegistration(BaseModel):
@@ -190,6 +196,7 @@ def _deliver_one(subscription: dict[str, Any], event: dict[str, Any], policy: Re
                     attempts=attempts,
                 )
                 _record_delivery(result)
+                deliveries_success_counter.inc()
                 return result
             last_error = f"status={resp.status_code} body={resp.text[:200]}"
         except requests.RequestException as exc:
@@ -206,6 +213,8 @@ def _deliver_one(subscription: dict[str, Any], event: dict[str, Any], policy: Re
     )
     _record_delivery(result, last_error=last_error)
     _record_dead_letter(tenant_id, target_url, tx_hash, payload, last_error or "unknown error")
+    deliveries_failed_counter.inc()
+    dead_letters_counter.inc()
     return result
 
 
@@ -351,3 +360,8 @@ def debug_received(limit: int = 20) -> dict[str, Any]:
     if limit <= 0:
         raise HTTPException(status_code=400, detail="limit must be positive")
     return {"items": _debug_received[:limit], "count": min(limit, len(_debug_received))}
+
+
+@app.get("/metrics")
+def metrics():
+    return generate_latest()

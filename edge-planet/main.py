@@ -12,6 +12,7 @@ import numpy as np
 import requests
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel, Field
+from prometheus_client import Counter, Gauge, generate_latest, CONTENT_TYPE_LATEST
 
 logging.basicConfig(level=os.getenv("LOG_LEVEL", "INFO"))
 logger = logging.getLogger("edge-planet")
@@ -82,6 +83,11 @@ _fl_lock = Lock()
 _fl_weights = np.zeros(FL_MODEL_DIM, dtype=np.float32)
 _fl_version = 1
 
+# Prometheus metrics
+events_sent_counter = Counter('edge_planet_events_sent_total', 'Total events sent to swarm')
+events_failed_counter = Counter('edge_planet_events_failed_total', 'Total events failed to send')
+fl_model_version_gauge = Gauge('edge_planet_fl_model_version', 'Current FL model version')
+
 
 def random_hex(size: int) -> str:
     return hashlib.sha256(f"{time.time_ns()}:{random.random()}".encode("utf-8")).hexdigest()[:size]
@@ -120,13 +126,16 @@ def send_to_swarm(api_key: str, event: EventPayload) -> dict:
         )
     except requests.RequestException as exc:
         logger.error("failed to publish to swarm: %s", exc)
+        events_failed_counter.inc()
         raise HTTPException(status_code=502, detail=f"swarm unreachable: {exc}") from exc
 
     if response.status_code >= 300:
         detail = response.text[:500]
+        events_failed_counter.inc()
         raise HTTPException(status_code=502, detail=f"swarm rejected event: {detail}")
 
     data = response.json()
+    events_sent_counter.inc()
     logger.info("event published envelope_id=%s event_type=%s", data.get("envelope_id"), event.event_type)
     return data
 
@@ -365,6 +374,13 @@ def fl_train_once() -> dict:
     local_weights, sample_count = _mock_local_training(base)
     _push_local_update(local_weights, sample_count)
     _fetch_global_model()
+
+
+
+@app.get("/metrics")
+def metrics():
+    fl_model_version_gauge.set(_fl_version)
+    return generate_latest()
 
     return {
         "status": "ok",

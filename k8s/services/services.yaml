@@ -1,0 +1,223 @@
+---
+# PostgreSQL Service
+apiVersion: v1
+kind: Service
+metadata:
+  name: postgres
+  namespace: galaxy
+  labels:
+    app: postgres
+spec:
+  type: ClusterIP
+  clusterIP: None  # Headless service for StatefulSet
+  selector:
+    app: postgres
+  ports:
+  - port: 5432
+    targetPort: 5432
+    name: postgres
+---
+# Redis Service
+apiVersion: v1
+kind: Service
+metadata:
+  name: redis
+  namespace: galaxy
+  labels:
+    app: redis
+spec:
+  type: ClusterIP
+  clusterIP: None  # Headless service for StatefulSet
+  selector:
+    app: redis
+  ports:
+  - port: 6379
+    targetPort: 6379
+    name: redis
+---
+# Authority Chain Services
+apiVersion: v1
+kind: Service
+metadata:
+  name: authority-chain
+  namespace: galaxy
+  labels:
+    app: authority-chain
+spec:
+  type: ClusterIP
+  clusterIP: None  # Headless service for StatefulSet
+  selector:
+    app: authority-chain
+  ports:
+  - port: 1317
+    targetPort: 1317
+    name: rest
+  - port: 9090
+    targetPort: 9090
+    name: grpc
+  - port: 26657
+    targetPort: 26657
+    name: rpc
+  - port: 26656
+    targetPort: 26656
+    name: p2p
+---
+# Authority Chain REST Endpoint (for external access)
+apiVersion: v1
+kind: Service
+metadata:
+  name: authority-chain-rest
+  namespace: galaxy
+  labels:
+    app: authority-chain
+spec:
+  type: LoadBalancer
+  selector:
+    app: authority-chain
+  ports:
+  - port: 80
+    targetPort: 1317
+    name: rest
+---
+# Swarm Node Services
+apiVersion: v1
+kind: Service
+metadata:
+  name: swarm-node
+  namespace: galaxy
+  labels:
+    app: swarm-node
+spec:
+  type: ClusterIP
+  clusterIP: None  # Headless service for StatefulSet
+  selector:
+    app: swarm-node
+  ports:
+  - port: 7001
+    targetPort: 7001
+    name: p2p
+  - port: 8443
+    targetPort: 8443
+    name: ingress
+  - port: 8081
+    targetPort: 8081
+    name: health
+---
+# Swarm Node Ingress Endpoint
+apiVersion: v1
+kind: Service
+metadata:
+  name: swarm-node-ingress
+  namespace: galaxy
+  labels:
+    app: swarm-node
+spec:
+  type: LoadBalancer
+  selector:
+    app: swarm-node
+  ports:
+  - port: 443
+    targetPort: 8443
+    name: ingress
+---
+# Edge Planet Service
+apiVersion: v1
+kind: Service
+metadata:
+  name: edge-planet
+  namespace: galaxy
+  labels:
+    app: edge-planet
+spec:
+  type: ClusterIP
+  selector:
+    app: edge-planet
+  ports:
+  - port: 8100
+    targetPort: 8100
+    name: http
+---
+# FL Aggregator Service
+apiVersion: v1
+kind: Service
+metadata:
+  name: fl-aggregator
+  namespace: galaxy
+  labels:
+    app: fl-aggregator
+spec:
+  type: ClusterIP
+  selector:
+    app: fl-aggregator
+  ports:
+  - port: 8200
+    targetPort: 8200
+    name: http
+---
+# Predictive Service
+apiVersion: v1
+kind: Service
+metadata:
+  name: predictive-service
+  namespace: galaxy
+  labels:
+    app: predictive-service
+spec:
+  type: ClusterIP
+  selector:
+    app: predictive-service
+  ports:
+  - port: 8300
+    targetPort: 8300
+    name: http
+---
+# Webhook Service
+apiVersion: v1
+kind: Service
+metadata:
+  name: webhook-service
+  namespace: galaxy
+  labels:
+    app: webhook-service
+spec:
+  type: ClusterIP
+  selector:
+    app: webhook-service
+  ports:
+  - port: 8500
+    targetPort: 8500
+    name: http
+---
+# Compliance Engine Service
+apiVersion: v1
+kind: Service
+metadata:
+  name: compliance-engine
+  namespace: galaxy
+  labels:
+    app: compliance-engine
+spec:
+  type: ClusterIP
+  selector:
+    app: compliance-engine
+  ports:
+  - port: 8400
+    targetPort: 8400
+    name: http
+---
+# Dashboard Service
+apiVersion: v1
+kind: Service
+metadata:
+  name: dashboard
+  namespace: galaxy
+  labels:
+    app: dashboard
+spec:
+  type: LoadBalancer
+  selector:
+    app: dashboard
+  ports:
+  - port: 80
+    targetPort: 3000
+    name: http

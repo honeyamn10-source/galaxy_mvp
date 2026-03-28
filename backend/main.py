@@ -8,6 +8,7 @@ import json
 import redis
 import logging
 import os
+from prometheus_client import Counter, Gauge, generate_latest
 
 from database import init_db, get_db, Event, Tenant, Device
 from schemas import (
@@ -25,6 +26,12 @@ from auth import get_tenant_from_api_key, check_quota, verify_device_ownership
 # Initialize logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+
+# Prometheus metrics
+events_submitted_counter = Counter('backend_events_submitted_total', 'Total events submitted')
+events_verified_counter = Counter('backend_events_verified_total', 'Total events verified')
+devices_registered_counter = Counter('backend_devices_registered_total', 'Total devices registered')
+tenants_registered_counter = Counter('backend_tenants_registered_total', 'Total tenants registered')
 
 
 class WebSocketManager:
@@ -165,6 +172,11 @@ async def submit_event(
     db.commit()
     db.refresh(db_event)
 
+    # Record metrics
+    events_submitted_counter.inc()
+    if db_event.verified:
+        events_verified_counter.inc()
+
     # Publish to Redis for real-time dashboards
     if redis_client:
         try:
@@ -276,6 +288,7 @@ def create_tenant(
     db.refresh(db_tenant)
 
     logger.info(f"Created tenant {db_tenant.id}: {tenant_data.name}")
+    tenants_registered_counter.inc()
 
     return TenantSecretResponse.from_attributes(db_tenant)
 
@@ -312,6 +325,7 @@ def register_device(
     db.refresh(db_device)
 
     logger.info(f"Registered device {db_device.id} for tenant {tenant.id}")
+    devices_registered_counter.inc()
 
     return DeviceResponse.from_attributes(db_device)
 
@@ -380,7 +394,12 @@ async def websocket_events(websocket: WebSocket):
         try:
             while True:
                 # Keep connection open; clients can optionally send ping messages.
-                await websocket.receive_text()
+                aw
+
+
+@app.get("/metrics")
+def metrics():
+    return generate_latest()ait websocket.receive_text()
         except WebSocketDisconnect:
             logger.info(f"WebSocket disconnected for tenant {tenant.id}")
         finally:

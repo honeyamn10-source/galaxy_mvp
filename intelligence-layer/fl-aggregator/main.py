@@ -9,6 +9,7 @@ import numpy as np
 import psycopg2
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel, Field
+from prometheus_client import Counter, Gauge, generate_latest
 
 logging.basicConfig(level=os.getenv("LOG_LEVEL", "INFO"))
 logger = logging.getLogger("fl-aggregator")
@@ -30,6 +31,12 @@ AGGREGATION_TOKEN = os.getenv("FL_AUTH_TOKEN", "")
 pending_updates: list[dict] = []
 current_version = 1
 current_weights = np.zeros(INITIAL_MODEL_SIZE, dtype=np.float32)
+
+# Prometheus metrics
+aggregation_counter = Counter('fl_aggregator_aggregations_total', 'Total model aggregations performed')
+updates_received_counter = Counter('fl_aggregator_updates_received_total', 'Total model updates received from clients')
+model_version_gauge = Gauge('fl_aggregator_model_version', 'Current global model version')
+pending_updates_gauge = Gauge('fl_aggregator_pending_updates', 'Number of pending model updates')
 
 
 class ModelUpdateRequest(BaseModel):
@@ -140,7 +147,9 @@ def _maybe_aggregate() -> None:
             logger.warning("Skipping update from %s due to mismatched shape", update["client_id"])
             continue
         weighted += w * (update["sample_count"] / total_samples)
-
+aggregation_counter.inc()
+    model_version_gauge.set(current_version)
+    
     current_version += 1
     current_weights = weighted.astype(np.float32)
 
@@ -174,7 +183,14 @@ def health() -> dict:
     return {
         "status": "ok",
         "service": "fl-aggregator",
-        "model_version": current_version,
+     
+
+
+@app.get("/metrics")
+def metrics():
+    model_version_gauge.set(current_version)
+    pending_updates_gauge.set(len(pending_updates))
+    return generate_latest()   "model_version": current_version,
         "pending_updates": len(pending_updates),
     }
 
@@ -199,6 +215,7 @@ def model_update(req: ModelUpdateRequest) -> dict:
             detail=f"weights length must be {len(current_weights)}",
         )
 
+    updates_received_counter.inc()
     if len(pending_updates) >= MAX_PENDING_UPDATES:
         raise HTTPException(status_code=429, detail="pending update queue full")
 

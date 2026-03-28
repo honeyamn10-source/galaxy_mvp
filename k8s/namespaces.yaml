@@ -1,0 +1,16 @@
+---
+# Kubernetes namespace for Galaxy system
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: galaxy
+  labels:
+    name: galaxy
+---
+# Kubernetes namespace for monitoring stack
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: galaxy-monitoring
+  labels:
+    name: galaxy-monitoring

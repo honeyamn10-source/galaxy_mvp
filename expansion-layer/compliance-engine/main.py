@@ -10,6 +10,7 @@ from typing import Any
 import psycopg2
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel, Field
+from prometheus_client import Counter, Gauge, generate_latest
 
 logging.basicConfig(level=os.getenv("LOG_LEVEL", "INFO"))
 logger = logging.getLogger("compliance-engine")
@@ -35,6 +36,11 @@ ENCRYPTION_KEY = os.getenv("COMPLIANCE_ENCRYPTION_KEY", "phase-v-key")
 AUDIT_LOG_PATH = Path(os.getenv("COMPLIANCE_AUDIT_LOG_PATH", "/data/compliance-audit.jsonl"))
 AUDIT_LOG_PATH.parent.mkdir(parents=True, exist_ok=True)
 DATABASE_URL = os.getenv("COMPLIANCE_DATABASE_URL", "")
+
+# Prometheus metrics
+transforms_processed_counter = Counter('compliance_engine_transforms_processed_total', 'Total compliance transformations processed')
+policies_applied_counter = Counter('compliance_engine_policies_applied_total', 'Total compliance policies applied', ['policy_name'])
+audit_logs_written_counter = Counter('compliance_engine_audit_logs_written_total', 'Total audit log entries written')
 
 
 class TransformRequest(BaseModel):
@@ -128,6 +134,8 @@ def _log_audit(
 
     with AUDIT_LOG_PATH.open("a", encoding="utf-8") as f:
         f.write(json.dumps(record) + "\n")
+    
+    audit_logs_written_counter.inc()
 
     conn = db_conn()
     if conn is None:
@@ -175,22 +183,24 @@ def transform(req: TransformRequest) -> TransformResponse:
     policies: list[str] = []
 
     if tenant_region in {"eu", "eea", "uk"}:
-        event = _gdpr_mask(event)
-        policies.append("gdpr-mask-pii")
+        policies_applied_counter.labels(policy_name="gdpr-mask-pii").inc()
 
     event_type = str(event.get("event_type", "")).strip().lower()
     if event_type in HIPAA_EVENT_TYPES:
         event = _hipaa_encrypt(event)
         policies.append("hipaa-encrypt-event")
+        policies_applied_counter.labels(policy_name="hipaa-encrypt-event").inc()
 
     if not policies:
         policies.append("policy-pass-through")
+        policies_applied_counter.labels(policy_name="policy-pass-through").inc()
 
     try:
         _log_audit(req.tenant, tenant_region, before, event, policies)
     except Exception as exc:
         raise HTTPException(status_code=500, detail=f"failed to write audit log: {exc}") from exc
 
+    transforms_processed_counter.inc()
     return TransformResponse(
         tenant=req.tenant,
         tenant_region=tenant_region,
@@ -219,3 +229,8 @@ def audit_recent(limit: int = 20) -> dict[str, Any]:
             continue
 
     return {"items": list(reversed(items)), "count": len(items)}
+
+
+@app.get("/metrics")
+def metrics():
+    return generate_latest()

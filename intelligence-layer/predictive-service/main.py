@@ -11,6 +11,7 @@ import requests
 from fastapi import FastAPI
 from pydantic import BaseModel
 from xgboost import XGBClassifier
+from prometheus_client import Counter, Gauge, generate_latest
 
 logging.basicConfig(level=os.getenv("LOG_LEVEL", "INFO"))
 logger = logging.getLogger("predictive-service")
@@ -46,6 +47,11 @@ model = XGBClassifier(
 )
 model_ready = False
 latest_predictions: list[dict[str, Any]] = []
+
+# Prometheus metrics
+predictions_generated_counter = Counter('predictive_service_predictions_generated_total', 'Total predictions generated')
+model_trains_counter = Counter('predictive_service_model_trains_total', 'Total model training runs')
+model_ready_gauge = Gauge('predictive_service_model_ready', 'Whether prediction model is ready (1=ready, 0=not ready)')
 
 
 class PredictionStatus(BaseModel):
@@ -190,7 +196,8 @@ def _loop() -> None:
     while not _loop_stop.is_set():
         events = _fetch_events()
         x, y = _fit_model(events)
-
+    model_trains_counter.inc()
+            
         if len(x) >= 4 and len(set(y.tolist())) > 1:
             try:
                 model.fit(x, y)
@@ -201,7 +208,8 @@ def _loop() -> None:
         latest_predictions = _make_prediction_events(events)
         for pred in latest_predictions:
             _publish_prediction(pred)
-
+predictions_generated_counter.add(len(latest_predictions))
+        
         logger.info("generated predictions=%d model_ready=%s", len(latest_predictions), model_ready)
         _loop_stop.wait(LOOP_INTERVAL_SECONDS)
 
@@ -249,15 +257,23 @@ def run_once() -> dict[str, Any]:
 
     global model_ready, latest_predictions
     if len(x) >= 4 and len(set(y.tolist())) > 1:
-        model.fit(x, y)
-        model_ready = True
+        model_trains_counter.inc()
 
     latest_predictions = _make_prediction_events(events)
     for pred in latest_predictions:
         _publish_prediction(pred)
 
+    predictions_generated_counter.add(len(latest_predictions))
     return {
         "status": "ok",
         "generated": len(latest_predictions),
+        "model_ready": model_ready,
+    }
+
+
+@app.get("/metrics")
+def metrics():
+    model_ready_gauge.set(1 if model_ready else 0)
+    return generate_latest()   "generated": len(latest_predictions),
         "model_ready": model_ready,
     }
