@@ -184,16 +184,16 @@ def health() -> dict:
     return {
         "status": "ok",
         "service": "fl-aggregator",
-     
+        "model_version": current_version,
+        "pending_updates": len(pending_updates),
+    }
 
 
 @app.get("/metrics")
 def metrics():
     model_version_gauge.set(current_version)
     pending_updates_gauge.set(len(pending_updates))
-    return generate_latest()   "model_version": current_version,
-        "pending_updates": len(pending_updates),
-    }
+    return generate_latest()
 
 
 @app.get("/fl/model/latest", response_model=ModelLatestResponse)
