@@ -1,0 +1,110 @@
+---
+# Swarm Node StatefulSet
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: swarm-node
+  namespace: galaxy
+  labels:
+    app: swarm-node
+spec:
+  serviceName: swarm-node
+  replicas: 2
+  selector:
+    matchLabels:
+      app: swarm-node
+  template:
+    metadata:
+      labels:
+        app: swarm-node
+    spec:
+      initContainers:
+      # Wait for authority chain
+      - name: wait-authority
+        image: busybox:1.35
+        command: ['sh', '-c', 'until nc -z authority-chain 26657; do echo waiting for authority-chain; sleep 2; done']
+      containers:
+      - name: swarm-node
+        image: galaxy-swarm-node:latest
+        imagePullPolicy: IfNotPresent
+        ports:
+        - containerPort: 7001
+          name: p2p
+        - containerPort: 8443
+          name: ingress
+        - containerPort: 8081
+          name: health
+        - containerPort: 8888
+          name: metrics
+        env:
+        - name: SWARM_NODE_NAME
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.name
+        - name: SWARM_IDENTITY_SEED
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.name
+        - name: SWARM_P2P_PORT
+          value: "7001"
+        - name: SWARM_INGRESS_ADDR
+          value: ":8443"
+        - name: SWARM_HEALTH_ADDR
+          value: ":8081"
+        - name: SWARM_RENDEZVOUS
+          valueFrom:
+            configMapKeyRef:
+              name: galaxy-config
+              key: SWARM_RENDEZVOUS
+        - name: SWARM_BOOTSTRAP_SEEDS
+          value: "swarm-node-0@swarm-node-0.swarm-node.galaxy.svc.cluster.local:7001"
+        - name: SWARM_FORWARD_MODE
+          valueFrom:
+            configMapKeyRef:
+              name: galaxy-config
+              key: SWARM_FORWARD_MODE
+        - name: VALIDATOR_GRPC_ADDR
+          valueFrom:
+            configMapKeyRef:
+              name: galaxy-config
+              key: VALIDATOR_GRPC_ADDR
+        - name: SWARM_CREATOR_ADDRESS
+          value: galaxy1swarmsubmitter
+        - name: SWARM_TLS_CERT
+          value: /certs/swarm-node.crt
+        - name: SWARM_TLS_KEY
+          value: /certs/swarm-node.key
+        - name: SWARM_CLIENT_CA
+          value: /certs/ca.crt
+        volumeMounts:
+        - name: tls-certs
+          mountPath: /certs
+          readOnly: true
+        resources:
+          requests:
+            memory: "512Mi"
+            cpu: "250m"
+          limits:
+            memory: "1Gi"
+            cpu: "500m"
+        livenessProbe:
+          httpGet:
+            path: /healthz
+            port: 8081
+          initialDelaySeconds: 30
+          periodSeconds: 15
+          timeoutSeconds: 5
+          failureThreshold: 3
+        readinessProbe:
+          httpGet:
+            path: /healthz
+            port: 8081
+          initialDelaySeconds: 15
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+      volumes:
+      - name: tls-certs
+        secret:
+          secretName: tls-certificates
+          defaultMode: 0400

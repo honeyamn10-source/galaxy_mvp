@@ -1,0 +1,291 @@
+---
+# Predictive Service Deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: predictive-service
+  namespace: galaxy
+  labels:
+    app: predictive-service
+    tier: intelligence
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: predictive-service
+  template:
+    metadata:
+      labels:
+        app: predictive-service
+        tier: intelligence
+    spec:
+      containers:
+      - name: predictive-service
+        image: galaxy-predictive-service:latest
+        imagePullPolicy: IfNotPresent
+        ports:
+        - containerPort: 8300
+          name: http
+        - containerPort: 8888
+          name: metrics
+        env:
+        - name: PRED_AUTHORITY_URL
+          valueFrom:
+            configMapKeyRef:
+              name: galaxy-config
+              key: PRED_AUTHORITY_URL
+        - name: PRED_SWARM_PUBLISH_URL
+          valueFrom:
+            configMapKeyRef:
+              name: galaxy-config
+              key: PRED_SWARM_PUBLISH_URL
+        - name: PRED_SWARM_API_KEY
+          valueFrom:
+            configMapKeyRef:
+              name: galaxy-config
+              key: PRED_SWARM_API_KEY
+        - name: PRED_CA_CERT
+          value: /certs/ca.crt
+        - name: PRED_CLIENT_CERT
+          value: /certs/edge-planet.crt
+        - name: PRED_CLIENT_KEY
+          value: /certs/edge-planet.key
+        - name: PRED_LOOP_INTERVAL_SECONDS
+          valueFrom:
+            configMapKeyRef:
+              name: galaxy-config
+              key: PRED_LOOP_INTERVAL_SECONDS
+        - name: PRED_TRAIN_WINDOW
+          valueFrom:
+            configMapKeyRef:
+              name: galaxy-config
+              key: PRED_TRAIN_WINDOW
+        - name: PRED_RISK_THRESHOLD
+          valueFrom:
+            configMapKeyRef:
+              name: galaxy-config
+              key: PRED_RISK_THRESHOLD
+        - name: LOG_LEVEL
+          valueFrom:
+            configMapKeyRef:
+              name: galaxy-config
+              key: LOG_LEVEL
+        volumeMounts:
+        - name: tls-certs
+          mountPath: /certs
+          readOnly: true
+        resources:
+          requests:
+            memory: "512Mi"
+            cpu: "250m"
+          limits:
+            memory: "1Gi"
+            cpu: "500m"
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8300
+          initialDelaySeconds: 30
+          periodSeconds: 30
+          timeoutSeconds: 5
+          failureThreshold: 3
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 8300
+          initialDelaySeconds: 20
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+      volumes:
+      - name: tls-certs
+        secret:
+          secretName: tls-certificates
+          defaultMode: 0400
+---
+# Webhook Service Deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: webhook-service
+  namespace: galaxy
+  labels:
+    app: webhook-service
+    tier: integration
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: webhook-service
+  template:
+    metadata:
+      labels:
+        app: webhook-service
+        tier: integration
+    spec:
+      initContainers:
+      - name: wait-postgres
+        image: busybox:1.35
+        command: ['sh', '-c', 'until nc -z postgres 5432; do echo waiting for postgres; sleep 2; done']
+      - name: wait-authority
+        image: busybox:1.35
+        command: ['sh', '-c', 'until nc -z authority-chain 1317; do echo waiting for authority-chain; sleep 2; done']
+      containers:
+      - name: webhook-service
+        image: galaxy-webhook-service:latest
+        imagePullPolicy: IfNotPresent
+        ports:
+        - containerPort: 8500
+          name: http
+        - containerPort: 8888
+          name: metrics
+        env:
+        - name: WEBHOOK_DATABASE_URL
+          valueFrom:
+            secretKeyRef:
+              name: postgres-secret
+              key: url
+        - name: WEBHOOK_AUTHORITY_EVENTS_URL
+          valueFrom:
+            configMapKeyRef:
+              name: galaxy-config
+              key: WEBHOOK_AUTHORITY_EVENTS_URL
+        - name: WEBHOOK_POLL_INTERVAL_SECONDS
+          valueFrom:
+            configMapKeyRef:
+              name: galaxy-config
+              key: WEBHOOK_POLL_INTERVAL_SECONDS
+        - name: WEBHOOK_MAX_RETRIES
+          valueFrom:
+            configMapKeyRef:
+              name: galaxy-config
+              key: WEBHOOK_MAX_RETRIES
+        - name: WEBHOOK_BACKOFF_BASE_SECONDS
+          valueFrom:
+            configMapKeyRef:
+              name: galaxy-config
+              key: WEBHOOK_BACKOFF_BASE_SECONDS
+        - name: LOG_LEVEL
+          valueFrom:
+            configMapKeyRef:
+              name: galaxy-config
+              key: LOG_LEVEL
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "100m"
+          limits:
+            memory: "512Mi"
+            cpu: "300m"
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8500
+          initialDelaySeconds: 30
+          periodSeconds: 30
+          timeoutSeconds: 5
+          failureThreshold: 3
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 8500
+          initialDelaySeconds: 20
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+---
+# Compliance Engine Deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: compliance-engine
+  namespace: galaxy
+  labels:
+    app: compliance-engine
+    tier: integration
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: compliance-engine
+  template:
+    metadata:
+      labels:
+        app: compliance-engine
+        tier: integration
+    spec:
+      initContainers:
+      - name: wait-postgres
+        image: busybox:1.35
+        command: ['sh', '-c', 'until nc -z postgres 5432; do echo waiting for postgres; sleep 2; done']
+      containers:
+      - name: compliance-engine
+        image: galaxy-compliance-engine:latest
+        imagePullPolicy: IfNotPresent
+        ports:
+        - containerPort: 8400
+          name: http
+        - containerPort: 8888
+          name: metrics
+        env:
+        - name: COMPLIANCE_DATABASE_URL
+          valueFrom:
+            secretKeyRef:
+              name: postgres-secret
+              key: url
+        - name: COMPLIANCE_DEFAULT_REGION
+          valueFrom:
+            configMapKeyRef:
+              name: galaxy-config
+              key: COMPLIANCE_DEFAULT_REGION
+        - name: COMPLIANCE_HIPAA_EVENT_TYPES
+          valueFrom:
+            configMapKeyRef:
+              name: galaxy-config
+              key: COMPLIANCE_HIPAA_EVENT_TYPES
+        - name: COMPLIANCE_PII_KEYS
+          valueFrom:
+            configMapKeyRef:
+              name: galaxy-config
+              key: COMPLIANCE_PII_KEYS
+        - name: COMPLIANCE_ENCRYPTION_KEY
+          valueFrom:
+            secretKeyRef:
+              name: api-keys
+              key: COMPLIANCE_ENCRYPTION_KEY
+        - name: COMPLIANCE_AUDIT_LOG_PATH
+          value: /data/compliance-audit.jsonl
+        - name: LOG_LEVEL
+          valueFrom:
+            configMapKeyRef:
+              name: galaxy-config
+              key: LOG_LEVEL
+        volumeMounts:
+        - name: compliance-logs
+          mountPath: /data
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "100m"
+          limits:
+            memory: "512Mi"
+            cpu: "300m"
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8400
+          initialDelaySeconds: 30
+          periodSeconds: 30
+          timeoutSeconds: 5
+          failureThreshold: 3
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 8400
+          initialDelaySeconds: 20
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+      volumes:
+      - name: compliance-logs
+        emptyDir: {}

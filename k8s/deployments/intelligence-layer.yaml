@@ -1,0 +1,213 @@
+---
+# Edge Planet Deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: edge-planet
+  namespace: galaxy
+  labels:
+    app: edge-planet
+    tier: edge
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: edge-planet
+  template:
+    metadata:
+      labels:
+        app: edge-planet
+        tier: edge
+    spec:
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+          - weight: 100
+            podAffinityTerm:
+              labelSelector:
+                matchExpressions:
+                - key: app
+                  operator: In
+                  values:
+                  - edge-planet
+              topologyKey: kubernetes.io/hostname
+      containers:
+      - name: edge-planet
+        image: galaxy-edge-planet:latest
+        imagePullPolicy: IfNotPresent
+        ports:
+        - containerPort: 8100
+          name: http
+        - containerPort: 8888
+          name: metrics
+        env:
+        - name: SWARM_INGEST_URL
+          valueFrom:
+            configMapKeyRef:
+              name: galaxy-config
+              key: SWARM_INGEST_URL
+        - name: EDGE_TENANT_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: api-keys
+              key: EDGE_TENANT_API_KEY
+        - name: EDGE_DEVICE_ID
+          valueFrom:
+            secretKeyRef:
+              name: api-keys
+              key: EDGE_DEVICE_ID
+        - name: EDGE_CA_CERT
+          value: /certs/ca.crt
+        - name: EDGE_CLIENT_CERT
+          value: /certs/edge-planet.crt
+        - name: EDGE_CLIENT_KEY
+          value: /certs/edge-planet.key
+        - name: FL_ENABLED
+          valueFrom:
+            configMapKeyRef:
+              name: galaxy-config
+              key: FL_ENABLED
+        - name: FL_AGGREGATOR_URL
+          valueFrom:
+            configMapKeyRef:
+              name: galaxy-config
+              key: FL_AGGREGATOR_URL
+        - name: FL_MODEL_DIM
+          valueFrom:
+            configMapKeyRef:
+              name: galaxy-config
+              key: FL_MODEL_DIM
+        - name: FL_SYNC_INTERVAL_SECONDS
+          valueFrom:
+            configMapKeyRef:
+              name: galaxy-config
+              key: FL_SYNC_INTERVAL_SECONDS
+        - name: LOG_LEVEL
+          valueFrom:
+            configMapKeyRef:
+              name: galaxy-config
+              key: LOG_LEVEL
+        volumeMounts:
+        - name: tls-certs
+          mountPath: /certs
+          readOnly: true
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "100m"
+          limits:
+            memory: "512Mi"
+            cpu: "300m"
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8100
+          initialDelaySeconds: 20
+          periodSeconds: 30
+          timeoutSeconds: 5
+          failureThreshold: 3
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 8100
+          initialDelaySeconds: 10
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+      volumes:
+      - name: tls-certs
+        secret:
+          secretName: tls-certificates
+          defaultMode: 0400
+---
+# FL Aggregator Deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: fl-aggregator
+  namespace: galaxy
+  labels:
+    app: fl-aggregator
+    tier: intelligence
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: fl-aggregator
+  template:
+    metadata:
+      labels:
+        app: fl-aggregator
+        tier: intelligence
+    spec:
+      initContainers:
+      - name: wait-postgres
+        image: busybox:1.35
+        command: ['sh', '-c', 'until nc -z postgres 5432; do echo waiting for postgres; sleep 2; done']
+      containers:
+      - name: fl-aggregator
+        image: galaxy-fl-aggregator:latest
+        imagePullPolicy: IfNotPresent
+        ports:
+        - containerPort: 8200
+          name: http
+        - containerPort: 8888
+          name: metrics
+        env:
+        - name: FL_DATABASE_URL
+          valueFrom:
+            secretKeyRef:
+              name: postgres-secret
+              key: url
+        - name: FL_MODEL_DIR
+          value: /data/fl-models
+        - name: FL_MODEL_SIZE
+          valueFrom:
+            configMapKeyRef:
+              name: galaxy-config
+              key: FL_MODEL_SIZE
+        - name: FL_MIN_UPDATES_FOR_AGG
+          valueFrom:
+            configMapKeyRef:
+              name: galaxy-config
+              key: FL_MIN_UPDATES_FOR_AGG
+        - name: FL_MAX_PENDING_UPDATES
+          valueFrom:
+            configMapKeyRef:
+              name: galaxy-config
+              key: FL_MAX_PENDING_UPDATES
+        - name: LOG_LEVEL
+          valueFrom:
+            configMapKeyRef:
+              name: galaxy-config
+              key: LOG_LEVEL
+        volumeMounts:
+        - name: fl-models
+          mountPath: /data/fl-models
+        resources:
+          requests:
+            memory: "512Mi"
+            cpu: "250m"
+          limits:
+            memory: "1Gi"
+            cpu: "500m"
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8200
+          initialDelaySeconds: 30
+          periodSeconds: 30
+          timeoutSeconds: 5
+          failureThreshold: 3
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 8200
+          initialDelaySeconds: 20
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+      volumes:
+      - name: fl-models
+        emptyDir:
+          sizeLimit: 10Gi

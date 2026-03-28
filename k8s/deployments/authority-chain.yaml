@@ -1,0 +1,129 @@
+---
+# Authority Chain StatefulSet
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: authority-chain
+  namespace: galaxy
+  labels:
+    app: authority-chain
+    tier: blockchain
+spec:
+  serviceName: authority-chain
+  replicas: 1
+  selector:
+    matchLabels:
+      app: authority-chain
+  template:
+    metadata:
+      labels:
+        app: authority-chain
+        tier: blockchain
+    spec:
+      initContainers:
+      # Wait for PostgreSQL before starting
+      - name: wait-postgres
+        image: busybox:1.35
+        command: ['sh', '-c', 'until nc -z postgres 5432; do echo waiting for postgres; sleep 2; done']
+      containers:
+      - name: authority-chain
+        image: galaxy-authority-chain:latest
+        imagePullPolicy: IfNotPresent
+        ports:
+        - containerPort: 1317
+          name: rest
+        - containerPort: 9090
+          name: grpc
+        - containerPort: 26657
+          name: rpc
+        - containerPort: 26656
+          name: p2p
+        - containerPort: 8888
+          name: metrics
+        env:
+        - name: CHAIN_ID
+          valueFrom:
+            configMapKeyRef:
+              name: galaxy-config
+              key: CHAIN_ID
+        - name: CHAIN_DATA_DIR
+          value: /data
+        - name: CHAIN_GRPC_ADDR
+          valueFrom:
+            configMapKeyRef:
+              name: galaxy-config
+              key: CHAIN_GRPC_ADDR
+        - name: CHAIN_REST_ADDR
+          valueFrom:
+            configMapKeyRef:
+              name: galaxy-config
+              key: CHAIN_REST_ADDR
+        - name: CHAIN_RPC_ADDR
+          valueFrom:
+            configMapKeyRef:
+              name: galaxy-config
+              key: CHAIN_RPC_ADDR
+        - name: CHAIN_VOTE_THRESHOLD
+          valueFrom:
+            configMapKeyRef:
+              name: galaxy-config
+              key: CHAIN_VOTE_THRESHOLD
+        - name: CHAIN_REWARD_UGALAXY
+          valueFrom:
+            configMapKeyRef:
+              name: galaxy-config
+              key: CHAIN_REWARD_UGALAXY
+        - name: CHAIN_SUBMISSION_FEE_UGALAXY
+          valueFrom:
+            configMapKeyRef:
+              name: galaxy-config
+              key: CHAIN_SUBMISSION_FEE_UGALAXY
+        - name: CHAIN_COSMWASM_ENABLED
+          valueFrom:
+            configMapKeyRef:
+              name: galaxy-config
+              key: CHAIN_COSMWASM_ENABLED
+        - name: CHAIN_COMPLIANCE_URL
+          valueFrom:
+            configMapKeyRef:
+              name: galaxy-config
+              key: CHAIN_COMPLIANCE_URL
+        - name: CHAIN_COMPLIANCE_TIMEOUT
+          valueFrom:
+            configMapKeyRef:
+              name: galaxy-config
+              key: CHAIN_COMPLIANCE_TIMEOUT
+        volumeMounts:
+        - name: authority-data
+          mountPath: /data
+        resources:
+          requests:
+            memory: "1Gi"
+            cpu: "500m"
+          limits:
+            memory: "2Gi"
+            cpu: "1000m"
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 1317
+          initialDelaySeconds: 60
+          periodSeconds: 30
+          timeoutSeconds: 10
+          failureThreshold: 3
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 1317
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+  volumeClaimTemplates:
+  - metadata:
+      name: authority-data
+    spec:
+      accessModes: [ "ReadWriteOnce" ]
+      resources:
+        requests:
+          storage: 100Gi
