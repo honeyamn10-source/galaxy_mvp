@@ -4,7 +4,8 @@ __pycache__/
 *.pyd
 *.swp
 *.swo
+*.egg-info/
+.pytest_cache/
+.coverage
 
 infra/certs/dev/
-authority-chain/gateway/__pycache__/
-edge-planet/__pycache__/
