@@ -34,6 +34,8 @@ import (
 	"github.com/libp2p/go-libp2p/p2p/discovery/routing"
 	"github.com/libp2p/go-libp2p/p2p/discovery/util"
 	ma "github.com/multiformats/go-multiaddr"
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/encoding"
@@ -44,6 +46,34 @@ const (
 	predictionTopicName = "galaxy.predictions.v1"
 	defaultForwardTO    = 8 * time.Second
 )
+
+// Prometheus metrics
+var (
+	eventsIngested = prometheus.NewCounter(
+		prometheus.CounterOpts{
+			Name: "swarm_node_events_ingested_total",
+			Help: "Total events ingested by the swarm node",
+		},
+	)
+	eventsForwarded = prometheus.NewCounter(
+		prometheus.CounterOpts{
+			Name: "swarm_node_events_forwarded_total",
+			Help: "Total events forwarded by the swarm node",
+		},
+	)
+	peerCount = prometheus.NewGauge(
+		prometheus.GaugeOpts{
+			Name: "swarm_node_connected_peers",
+			Help: "Number of connected peer nodes",
+		},
+	)
+)
+
+func init() {
+	prometheus.MustRegister(eventsIngested)
+	prometheus.MustRegister(eventsForwarded)
+	prometheus.MustRegister(peerCount)
+}
 
 type Config struct {
 	NodeName            string
@@ -380,6 +410,7 @@ func (a *App) runHTTPServers(ctx context.Context) error {
 	handler.HandleFunc("/healthz", a.handleHealth)
 	handler.HandleFunc("/ingest", a.handleIngest)
 	handler.HandleFunc("/ingest-prediction", a.handleIngestPrediction)
+	handler.Handle("/metrics", promhttp.Handler())
 
 	tlsCfg, err := a.serverTLSConfig()
 	if err != nil {
@@ -489,6 +520,8 @@ func (a *App) handleIngest(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	eventsIngested.Inc()
+	eventsForwarded.Inc()
 	writeJSON(w, http.StatusAccepted, map[string]any{
 		"status":      "accepted",
 		"envelope_id": envelope.EnvelopeID,
@@ -540,6 +573,7 @@ func (a *App) handleIngestPrediction(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	eventsIngested.Inc()
 	writeJSON(w, http.StatusAccepted, map[string]any{
 		"status":      "accepted",
 		"envelope_id": envelope.EnvelopeID,

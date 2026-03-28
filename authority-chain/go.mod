@@ -7,5 +7,6 @@ require (
 	github.com/cometbft/cometbft v0.38.10
 	github.com/cosmos/cosmos-sdk v0.50.8
 	github.com/gorilla/websocket v1.5.3
+	github.com/prometheus/client_golang v1.17.0
 	google.golang.org/grpc v1.66.2
 )

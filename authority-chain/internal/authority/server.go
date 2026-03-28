@@ -19,9 +19,40 @@ import (
 	"time"
 
 	"github.com/gorilla/websocket"
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/encoding"
 )
+
+// Prometheus metrics
+var (
+	eventsSubmitted = prometheus.NewCounterVec(
+		prometheus.CounterOpts{
+			Name: "authority_chain_events_submitted_total",
+			Help: "Total events submitted to the chain",
+		},
+		[]string{"status"},
+	)
+	eventsVerified = prometheus.NewCounter(
+		prometheus.CounterOpts{
+			Name: "authority_chain_events_verified_total",
+			Help: "Total events verified",
+		},
+	)
+	blockchainHeight = prometheus.NewGauge(
+		prometheus.GaugeOpts{
+			Name: "authority_chain_blockchain_height",
+			Help: "Current blockchain height",
+		},
+	)
+)
+
+func init() {
+	prometheus.MustRegister(eventsSubmitted)
+	prometheus.MustRegister(eventsVerified)
+	prometheus.MustRegister(blockchainHeight)
+}
 
 type Config struct {
 	ChainID              string
@@ -184,7 +215,8 @@ func NewServerFromEnv() (*Server, error) {
 		byFrameHash: make(map[string]int),
 		economy: EconomyState{
 			PlanetRegistry: make(map[string]string),
-			Balances:       make(map[string]int64),
+			Balances:       makmetrics", promhttp.Handler().ServeHTTP)
+	restMux.HandleFunc("/e(map[string]int64),
 			Stakes:         make(map[string]int64),
 		},
 		subs:        make(map[*websocket.Conn]struct{}),
@@ -345,7 +377,7 @@ func (s *Server) SubmitEvent(ctx context.Context, req *submitEventRequest) (*sub
 	if e.Event.Confidence >= s.cfg.AutoVerifyConfidence {
 		e.VotesYes = s.cfg.VoteThreshold
 		e.Status = "verified"
-		s.applyRewardLocked(&e)
+		eventsVerified.Inc()
 	}
 
 	s.events = append(s.events, e)
@@ -354,6 +386,9 @@ func (s *Server) SubmitEvent(ctx context.Context, req *submitEventRequest) (*sub
 	if e.Event.FrameHash != "" {
 		s.byFrameHash[e.Event.FrameHash] = idx
 	}
+
+	blockchainHeight.Set(float64(len(s.events)))
+	eventsSubmitted.WithLabelValues(e.Status).Inc()	}
 
 	_ = s.appendPersisted(e)
 	go s.broadcastTxEvent(e)
@@ -387,8 +422,10 @@ func (s *Server) VoteEvent(ctx context.Context, req *voteEventRequest) (*voteEve
 		e.VotesNo++
 	}
 	e.UpdatedAt = time.Now().UTC().Format(time.RFC3339)
-	if e.VotesYes >= s.cfg.VoteThreshold && e.VotesYes > e.VotesNo {
-		e.Status = "verified"
+		eventsVerified.Inc()
+	}
+	s.events[idx] = e
+	blockchainHeight.Set(float64(len(s.events)))fied"
 		s.applyRewardLocked(&e)
 	}
 	s.events[idx] = e
@@ -421,11 +458,13 @@ func (s *Server) endBlockLoop(ctx context.Context) {
 				if e.VotesYes >= s.cfg.VoteThreshold && e.VotesYes > e.VotesNo {
 					e.Status = "verified"
 					s.applyRewardLocked(&e)
+					eventsVerified.Inc()
 				} else {
 					e.Status = "rejected"
 				}
 				e.UpdatedAt = time.Now().UTC().Format(time.RFC3339)
 				s.events[i] = e
+				blockchainHeight.Set(float64(len(s.events)))
 				dirty = true
 			}
 			s.mu.Unlock()
