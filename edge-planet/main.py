@@ -6,7 +6,7 @@ import random
 import time
 from datetime import datetime, timezone
 from threading import Event, Lock, Thread
-from typing import Optional
+from typing import Any, Optional
 
 import numpy as np
 import requests
@@ -57,8 +57,15 @@ class StreamRequest(BaseModel):
     device_id: Optional[str] = None
 
 
+class EventsSubmitRequest(BaseModel):
+    device_id: str
+    event_type: str
+    confidence: float = Field(..., ge=0.0, le=1.0)
+    metadata: dict[str, Any] = Field(default_factory=dict)
+
+
 SWARM_INGEST_URL = os.getenv("SWARM_INGEST_URL", "https://swarm-node-1:8443/ingest")
-DEFAULT_API_KEY = os.getenv("EDGE_TENANT_API_KEY", "")
+DEFAULT_API_KEY = os.getenv("EDGE_TENANT_API_KEY") or "edge-planet-local"
 DEFAULT_DEVICE_ID = os.getenv("EDGE_DEVICE_ID", "")
 DEFAULT_LOCATION = os.getenv("EDGE_DEFAULT_LOCATION", "Sector-A")
 VERIFY_CERT = os.getenv("EDGE_CA_CERT", "/certs/ca.crt")
@@ -258,6 +265,32 @@ def emit_once(request: EmitRequest) -> dict:
     }
 
 
+@app.post("/events")
+def submit_event(request: EventsSubmitRequest) -> dict:
+    # Compatibility endpoint retained for Phase V test flow and legacy clients.
+    api_key = DEFAULT_API_KEY
+    if not api_key:
+        raise HTTPException(status_code=400, detail="EDGE_TENANT_API_KEY is required")
+
+    location = request.metadata.get("location") if request.metadata else None
+    event = EventPayload(
+        device_id=request.device_id,
+        event_type=request.event_type,
+        confidence=request.confidence,
+        location=location or DEFAULT_LOCATION,
+        frame_hash=random_hex(64),
+        signature=random_hex(64),
+    )
+    result = send_to_swarm(api_key, event)
+    envelope_id = result.get("envelope_id", "")
+    return {
+        "status": "accepted",
+        "id": envelope_id,
+        "event_id": envelope_id,
+        "envelope_id": envelope_id,
+    }
+
+
 @app.post("/emit-batch")
 def emit_batch(request: EmitBatchRequest) -> dict:
     api_key = request.api_key or DEFAULT_API_KEY
@@ -375,15 +408,14 @@ def fl_train_once() -> dict:
     _push_local_update(local_weights, sample_count)
     _fetch_global_model()
 
+    return {
+        "status": "ok",
+        "sample_count": sample_count,
+        "model_version": _fl_version,
+    }
 
 
 @app.get("/metrics")
 def metrics():
     fl_model_version_gauge.set(_fl_version)
     return generate_latest()
-
-    return {
-        "status": "ok",
-        "sample_count": sample_count,
-        "model_version": _fl_version,
-    }

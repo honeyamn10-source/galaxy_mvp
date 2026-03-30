@@ -1,0 +1,274 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Galaxy Configurator</title>
+  <style>
+    :root {
+      --ink: #0f172a;
+      --ink-soft: #334155;
+      --paper: #f8fafc;
+      --card: #ffffff;
+      --accent: #0ea5e9;
+      --accent-strong: #0369a1;
+      --line: #cbd5e1;
+      --ok: #059669;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      font-family: "Space Grotesk", "Manrope", sans-serif;
+      color: var(--ink);
+      background:
+        radial-gradient(circle at 10% 20%, rgba(14, 165, 233, 0.16), transparent 45%),
+        radial-gradient(circle at 90% 10%, rgba(2, 132, 199, 0.12), transparent 40%),
+        linear-gradient(180deg, #f0f9ff 0%, #f8fafc 42%, #e2e8f0 100%);
+      min-height: 100vh;
+      display: grid;
+      place-items: center;
+      padding: 24px;
+    }
+
+    .panel {
+      width: min(920px, 100%);
+      background: var(--card);
+      border: 1px solid var(--line);
+      border-radius: 20px;
+      box-shadow: 0 16px 50px rgba(15, 23, 42, 0.12);
+      overflow: hidden;
+      animation: rise 450ms ease-out;
+    }
+
+    .hero {
+      padding: 28px;
+      color: white;
+      background: linear-gradient(120deg, #0f172a 0%, #0c4a6e 60%, #0369a1 100%);
+    }
+
+    .hero h1 {
+      margin: 0;
+      font-size: clamp(1.5rem, 2.5vw, 2.1rem);
+      letter-spacing: 0.02em;
+    }
+
+    .hero p {
+      margin: 10px 0 0;
+      color: #dbeafe;
+    }
+
+    .content {
+      padding: 22px;
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 20px;
+    }
+
+    label {
+      display: block;
+      font-size: 0.88rem;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      margin-bottom: 8px;
+      color: var(--ink-soft);
+    }
+
+    input {
+      width: 100%;
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      padding: 11px 12px;
+      font-size: 0.95rem;
+      color: var(--ink);
+      background: #f8fafc;
+      transition: border-color .2s ease, box-shadow .2s ease;
+    }
+
+    input:focus {
+      outline: none;
+      border-color: var(--accent);
+      box-shadow: 0 0 0 3px rgba(14, 165, 233, 0.2);
+    }
+
+    .full { grid-column: 1 / -1; }
+
+    textarea {
+      width: 100%;
+      min-height: 180px;
+      border-radius: 12px;
+      border: 1px solid var(--line);
+      padding: 12px;
+      font-family: "IBM Plex Mono", monospace;
+      background: #0f172a;
+      color: #d1fae5;
+      resize: vertical;
+    }
+
+    .actions {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+
+    button {
+      border: none;
+      border-radius: 12px;
+      padding: 11px 14px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: transform 120ms ease;
+    }
+
+    button:hover { transform: translateY(-1px); }
+
+    .primary {
+      background: var(--accent);
+      color: white;
+    }
+
+    .ghost {
+      background: #e2e8f0;
+      color: var(--ink);
+    }
+
+    .status {
+      color: var(--ok);
+      font-weight: 600;
+      min-height: 20px;
+    }
+
+    @keyframes rise {
+      from { transform: translateY(8px); opacity: 0; }
+      to { transform: translateY(0); opacity: 1; }
+    }
+
+    @media (max-width: 760px) {
+      .content { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <main class="panel">
+    <header class="hero">
+      <h1>Galaxy Runtime Configurator</h1>
+      <p>Generate a stack .env file before first startup.</p>
+    </header>
+
+    <section class="content">
+      <div>
+        <label for="edgeApiKey">Edge Tenant API Key</label>
+        <input id="edgeApiKey" placeholder="edge-planet-local" />
+      </div>
+      <div>
+        <label for="edgeDeviceId">Default Edge Device ID</label>
+        <input id="edgeDeviceId" placeholder="planet-01" />
+      </div>
+      <div>
+        <label for="weatherApiKey">OpenWeather API Key</label>
+        <input id="weatherApiKey" placeholder="optional" />
+      </div>
+      <div>
+        <label for="ollamaModel">Ollama Model</label>
+        <input id="ollamaModel" placeholder="deepseek-llm:6.7b" />
+      </div>
+      <div class="full">
+        <label for="ollamaUrl">Ollama Base URL</label>
+        <input id="ollamaUrl" placeholder="http://host.docker.internal:11434" />
+      </div>
+      <div class="full">
+        <label for="envPreview">Generated .env</label>
+        <textarea id="envPreview" readonly></textarea>
+      </div>
+      <div class="full actions">
+        <button class="primary" id="downloadEnv">Download .env</button>
+        <button class="ghost" id="copyEnv">Copy To Clipboard</button>
+        <button class="ghost" id="resetDefaults">Reset Defaults</button>
+      </div>
+      <div class="full status" id="status"></div>
+    </section>
+  </main>
+
+  <script>
+    const defaults = {
+      edgeApiKey: "edge-planet-local",
+      edgeDeviceId: "planet-01",
+      weatherApiKey: "",
+      ollamaModel: "deepseek-llm:6.7b",
+      ollamaUrl: "http://host.docker.internal:11434"
+    };
+
+    const fields = {
+      edgeApiKey: document.getElementById("edgeApiKey"),
+      edgeDeviceId: document.getElementById("edgeDeviceId"),
+      weatherApiKey: document.getElementById("weatherApiKey"),
+      ollamaModel: document.getElementById("ollamaModel"),
+      ollamaUrl: document.getElementById("ollamaUrl")
+    };
+
+    const preview = document.getElementById("envPreview");
+    const status = document.getElementById("status");
+
+    function renderEnv() {
+      const envText = [
+        "# Galaxy MVP runtime configuration",
+        `EDGE_TENANT_API_KEY=${fields.edgeApiKey.value.trim()}`,
+        `EDGE_DEVICE_ID=${fields.edgeDeviceId.value.trim()}`,
+        `OPENWEATHER_API_KEY=${fields.weatherApiKey.value.trim()}`,
+        `OLLAMA_MODEL=${fields.ollamaModel.value.trim()}`,
+        `OLLAMA_BASE_URL=${fields.ollamaUrl.value.trim()}`
+      ].join("\n") + "\n";
+      preview.value = envText;
+      localStorage.setItem("galaxy_env_values", JSON.stringify(getValues()));
+    }
+
+    function getValues() {
+      return {
+        edgeApiKey: fields.edgeApiKey.value || defaults.edgeApiKey,
+        edgeDeviceId: fields.edgeDeviceId.value || defaults.edgeDeviceId,
+        weatherApiKey: fields.weatherApiKey.value,
+        ollamaModel: fields.ollamaModel.value || defaults.ollamaModel,
+        ollamaUrl: fields.ollamaUrl.value || defaults.ollamaUrl
+      };
+    }
+
+    function applyValues(values) {
+      fields.edgeApiKey.value = values.edgeApiKey || defaults.edgeApiKey;
+      fields.edgeDeviceId.value = values.edgeDeviceId || defaults.edgeDeviceId;
+      fields.weatherApiKey.value = values.weatherApiKey || defaults.weatherApiKey;
+      fields.ollamaModel.value = values.ollamaModel || defaults.ollamaModel;
+      fields.ollamaUrl.value = values.ollamaUrl || defaults.ollamaUrl;
+      renderEnv();
+    }
+
+    function downloadEnv() {
+      const blob = new Blob([preview.value], { type: "text/plain" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = ".env";
+      a.click();
+      URL.revokeObjectURL(url);
+      status.textContent = "Downloaded .env. Put it beside docker-compose.yml before starting the stack.";
+    }
+
+    async function copyEnv() {
+      try {
+        await navigator.clipboard.writeText(preview.value);
+        status.textContent = "Copied .env contents to clipboard.";
+      } catch {
+        status.textContent = "Clipboard access failed. Use Download .env instead.";
+      }
+    }
+
+    Object.values(fields).forEach((el) => el.addEventListener("input", renderEnv));
+    document.getElementById("downloadEnv").addEventListener("click", downloadEnv);
+    document.getElementById("copyEnv").addEventListener("click", copyEnv);
+    document.getElementById("resetDefaults").addEventListener("click", () => applyValues(defaults));
+
+    const saved = localStorage.getItem("galaxy_env_values");
+    applyValues(saved ? JSON.parse(saved) : defaults);
+  </script>
+</body>
+</html>

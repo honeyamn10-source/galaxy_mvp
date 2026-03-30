@@ -196,9 +196,9 @@ def _loop() -> None:
     while not _loop_stop.is_set():
         events = _fetch_events()
         x, y = _fit_model(events)
-    model_trains_counter.inc()
-            
+
         if len(x) >= 4 and len(set(y.tolist())) > 1:
+            model_trains_counter.inc()
             try:
                 model.fit(x, y)
                 model_ready = True
@@ -208,8 +208,8 @@ def _loop() -> None:
         latest_predictions = _make_prediction_events(events)
         for pred in latest_predictions:
             _publish_prediction(pred)
-predictions_generated_counter.add(len(latest_predictions))
-        
+
+        predictions_generated_counter.add(len(latest_predictions))
         logger.info("generated predictions=%d model_ready=%s", len(latest_predictions), model_ready)
         _loop_stop.wait(LOOP_INTERVAL_SECONDS)
 
@@ -258,6 +258,11 @@ def run_once() -> dict[str, Any]:
     global model_ready, latest_predictions
     if len(x) >= 4 and len(set(y.tolist())) > 1:
         model_trains_counter.inc()
+        try:
+            model.fit(x, y)
+            model_ready = True
+        except Exception as exc:
+            logger.error("model fit failed: %s", exc)
 
     latest_predictions = _make_prediction_events(events)
     for pred in latest_predictions:
@@ -274,6 +279,4 @@ def run_once() -> dict[str, Any]:
 @app.get("/metrics")
 def metrics():
     model_ready_gauge.set(1 if model_ready else 0)
-    return generate_latest()   "generated": len(latest_predictions),
-        "model_ready": model_ready,
-    }
+    return generate_latest()

@@ -227,6 +227,21 @@ When ready to scale to multiple planets:
 3. Implement peer discovery (DHT)
 4. Add auto-healing relay nodes
 
+## Packaging And Distribution
+
+```bash
+# Install on Linux/macOS (after making executable)
+./install-galaxy.sh
+
+# Push service images to GHCR
+GHCR_OWNER=honeyamn10-source GHCR_TAG=latest CR_PAT=<github_token> ./scripts/push-images-ghcr.sh
+```
+
+- Installer script: `install-galaxy.sh`
+- GHCR push helper: `scripts/push-images-ghcr.sh`
+- Runtime config UI: `frontend/configurator.html`
+- Landing page: `docs/landing/index.html`
+
 ## Need Help?
 
 - Check logs: `docker-compose logs -f backend`
