@@ -95,9 +95,9 @@ services:
       authority-chain:
         condition: service_started
     volumes:
-      - ./infra/certs/dev:/certs:ro
+      - ./infra/certs/dev:/certs:ro,z
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8081/healthz"]
+      test: ["CMD", "wget", "-qO-", "http://localhost:8081/healthz"]
       interval: 10s
       timeout: 5s
       retries: 10
@@ -127,9 +127,9 @@ services:
       swarm-node-1:
         condition: service_healthy
     volumes:
-      - ./infra/certs/dev:/certs:ro
+      - ./infra/certs/dev:/certs:ro,z
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8081/healthz"]
+      test: ["CMD", "wget", "-qO-", "http://localhost:8081/healthz"]
       interval: 10s
       timeout: 5s
       retries: 10
@@ -157,7 +157,7 @@ services:
       fl-aggregator:
         condition: service_started
     volumes:
-      - ./infra/certs/dev:/certs:ro
+      - ./infra/certs/dev:/certs:ro,z
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8100/health', timeout=3)"]
       interval: 10s
@@ -181,7 +181,7 @@ services:
       postgres:
         condition: service_healthy
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8200/health"]
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8200/health', timeout=3)"]
       interval: 10s
       timeout: 5s
       retries: 10
@@ -200,7 +200,7 @@ services:
       PRED_TRAIN_WINDOW: 200
       PRED_RISK_THRESHOLD: 0.65
     volumes:
-      - ./infra/certs/dev:/certs:ro
+      - ./infra/certs/dev:/certs:ro,z
     ports:
       - "8300:8300"
     depends_on:
@@ -209,7 +209,7 @@ services:
       swarm-node-1:
         condition: service_healthy
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8300/health"]
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8300/health', timeout=3)"]
       interval: 10s
       timeout: 5s
       retries: 10
@@ -232,7 +232,7 @@ services:
     volumes:
       - compliance_data:/data
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8400/health"]
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8400/health', timeout=3)"]
       interval: 10s
       timeout: 5s
       retries: 10
@@ -254,7 +254,7 @@ services:
       authority-chain:
         condition: service_healthy
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8500/health"]
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8500/health', timeout=3)"]
       interval: 10s
       timeout: 5s
       retries: 10
@@ -280,7 +280,7 @@ services:
     ports:
       - "8600:8600"
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8600/health"]
+      test: ["CMD", "python", "-c", "import requests; requests.get('http://localhost:8600/health', timeout=3)"]
       interval: 30s
       timeout: 10s
       retries: 5

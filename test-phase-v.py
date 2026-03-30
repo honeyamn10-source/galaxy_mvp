@@ -32,23 +32,23 @@ class Colors:
 
 
 def print_header(msg):
-    print(f"\n{Colors.HEADER}{Colors.BOLD}=== {msg} ==={Colors.ENDC}")
+    print(f"\n{Colors.HEADER}{Colors.BOLD}=== {msg} ==={Colors.ENDC}", flush=True)
 
 
 def print_ok(msg):
-    print(f"{Colors.OKGREEN}✓ {msg}{Colors.ENDC}")
+    print(f"{Colors.OKGREEN}✓ {msg}{Colors.ENDC}", flush=True)
 
 
 def print_info(msg):
-    print(f"{Colors.OKCYAN}ℹ {msg}{Colors.ENDC}")
+    print(f"{Colors.OKCYAN}ℹ {msg}{Colors.ENDC}", flush=True)
 
 
 def print_warn(msg):
-    print(f"{Colors.WARNING}! {msg}{Colors.ENDC}")
+    print(f"{Colors.WARNING}! {msg}{Colors.ENDC}", flush=True)
 
 
 def fail(msg):
-    print(f"{Colors.FAIL}✗ {msg}{Colors.ENDC}")
+    print(f"{Colors.FAIL}✗ {msg}{Colors.ENDC}", flush=True)
     sys.exit(1)
 
 
@@ -119,7 +119,9 @@ def test_event_verification(event_id: str):
     print_header("Event Verification")
 
     start = time.time()
+    attempts = 0
     while time.time() - start < MAX_WAIT:
+        attempts += 1
         try:
             resp = requests.get(f"{AUTHORITY}/galaxy/v1/events", timeout=5)
             if resp.status_code == 200:
@@ -138,6 +140,9 @@ def test_event_verification(event_id: str):
                         return status, confidence
         except requests.RequestException:
             pass
+
+        if attempts % 5 == 0:
+            print_info("Waiting for authority event propagation...")
         time.sleep(POLL_INTERVAL)
 
     print_warn("Event not found in authority (may verify slowly)")
