@@ -199,6 +199,46 @@ Installer prompts:
 - RTSP URL (optional)
 - Compliance region
 
+## Cloudflare Pages Zero-Touch CI/CD
+
+This repository now includes fully automated Cloudflare Pages deployment via GitHub Actions.
+
+Workflow file:
+
+- `.github/workflows/cloudflare-pages.yml`
+
+Auto-detection supports:
+
+- React
+- Vite
+- Next.js
+- Static HTML
+
+For this repository, static deployment target is `docs/landing`.
+
+### Initial one-time setup (required)
+
+Add these GitHub repository secrets:
+
+- `CLOUDFLARE_API_TOKEN`
+- `CLOUDFLARE_ACCOUNT_ID`
+- `CF_PAGES_PROJECT_NAME`
+
+After this one-time setup, every push to `main` deploys automatically and every pull request creates a preview deployment.
+
+### Build/output mapping
+
+- React/Vite: `npm run build` -> `dist` or `build` (auto-detected)
+- Next.js: `npm run build` -> `.next`
+- Static: no build -> `/` (deployed from detected static app directory)
+
+### Deployment behavior
+
+- Automatically installs missing dependencies when needed
+- Retries Cloudflare deployment up to 3 times
+- Validates output directory and falls back safely for static sites
+- Writes deployment URL in GitHub Actions step summary
+
 ## Cloud Demo Deployment (Ubuntu 22.04)
 
 Use the demo deployment script on a fresh VM. It installs Docker, deploys the stack, and configures nginx basic auth.

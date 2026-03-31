@@ -1,0 +1,9 @@
+name = "galaxy-worker"
+main = "worker.js"
+compatibility_date = "2026-03-30"
+
+[vars]
+ENVIRONMENT = "production"
+
+# Add secrets with:
+# wrangler secret put HF_API_TOKEN
