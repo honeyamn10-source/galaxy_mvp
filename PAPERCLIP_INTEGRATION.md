@@ -119,6 +119,25 @@ Critical adapter setting:
 - If agent details show `adapterType: claude_local`, the run will fail with `Command not found in PATH: "claude"` on machines without Claude CLI.
 - In UI, edit the agent and select the skill-based/workflow execution mode, then keep the three Galaxy skills attached.
 
+## Creating an Agent for GitHub API Skills
+
+When creating `Galaxy DevOps Engineer`, do not use the Claude local adapter.
+
+Recommended configuration:
+
+1. Open Agent settings.
+2. Set adapter type to `Command` (or any non-Claude adapter that does not require a local `claude` binary).
+3. Save adapter settings.
+4. Attach these skills under Skills:
+   - `galaxy-autonomous-loop`
+   - `galaxy-pages-deploy`
+   - `galaxy-worker-deploy`
+
+Why this matters:
+
+- `claude_local` tries to execute a local `claude` command.
+- If Claude CLI is not installed, runs fail with `Command not found in PATH: "claude"` before skills can execute.
+
 ## 6) Create A Sample Goal
 
 Example goal:
