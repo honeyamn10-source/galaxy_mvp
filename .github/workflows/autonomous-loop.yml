@@ -1,0 +1,96 @@
+name: Autonomous Improvement Loop
+
+on:
+  schedule:
+    - cron: '0 * * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  decide-and-implement:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Decide next improvement
+        id: decision
+        run: |
+          python scripts/autonomous/decision_engine.py
+
+      - name: Stop when no action is needed
+        if: ${{ steps.decision.outputs.action == 'noop' }}
+        run: |
+          echo "No safe deterministic improvement available."
+
+      - name: Create branch for improvement
+        if: ${{ steps.decision.outputs.action != 'noop' }}
+        run: |
+          set -euo pipefail
+          BRANCH="feature/ai-improvement-$(date +%Y%m%d-%H%M%S)"
+          echo "BRANCH=$BRANCH" >> "$GITHUB_ENV"
+          git switch -c "$BRANCH"
+
+      - name: Apply deterministic improvement
+        if: ${{ steps.decision.outputs.action != 'noop' }}
+        run: |
+          set -euo pipefail
+          case "${{ steps.decision.outputs.action }}" in
+            add_dependabot)
+              mkdir -p .github
+              cat > .github/dependabot.yml <<'YAML'
+              version: 2
+              updates:
+                - package-ecosystem: "github-actions"
+                  directory: "/"
+                  schedule:
+                    interval: "weekly"
+                - package-ecosystem: "npm"
+                  directory: "/"
+                  schedule:
+                    interval: "weekly"
+              YAML
+              ;;
+            *)
+              echo "Unsupported action: ${{ steps.decision.outputs.action }}" >&2
+              exit 1
+              ;;
+          esac
+
+      - name: Commit and push branch
+        if: ${{ steps.decision.outputs.action != 'noop' }}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          if git diff --cached --quiet; then
+            echo "No changes to commit"
+            exit 0
+          fi
+          git commit -m "chore(autonomous): ${{ steps.decision.outputs.action }}"
+          git push --set-upstream origin "$BRANCH"
+
+      - name: Create PR with gh CLI
+        if: ${{ steps.decision.outputs.action != 'noop' }}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          gh pr create \
+            --title "Autonomous Improvement: ${BRANCH}" \
+            --body "Action: ${{ steps.decision.outputs.action }}\nReason: ${{ steps.decision.outputs.reason }}" \
+            --base main \
+            --head "$BRANCH"
