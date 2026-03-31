@@ -1,0 +1,10 @@
+{
+  "name": "galaxy-mvp-pages",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Cloudflare Pages deployment manifest for Galaxy MVP static landing app",
+  "scripts": {
+    "build": "echo 'Static deployment: no build required'",
+    "pages:deploy": "bash scripts/cloudflare-pages/deploy_retry.sh"
+  }
+}

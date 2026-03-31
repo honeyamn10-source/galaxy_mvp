@@ -268,6 +268,28 @@ Optional credentials override:
 sudo DEMO_AUTH_USER=admin DEMO_AUTH_PASS='change-me' bash deploy-demo.sh
 ```
 
+## Cloudflare Pages Auto Deploy (GitHub CI/CD)
+
+1. Add GitHub repository secrets:
+
+- `CLOUDFLARE_API_TOKEN`
+- `CLOUDFLARE_ACCOUNT_ID`
+- `CF_PAGES_PROJECT_NAME`
+
+2. Push to `main`:
+
+```bash
+git push origin main
+```
+
+3. Check deployment URL in GitHub Actions summary for `Cloudflare Pages CI/CD`.
+
+Auto behavior:
+
+- Push to `main` -> production deployment
+- Pull request -> preview deployment + PR comment URL
+- Automatic framework detection and build/output configuration
+
 ## Desktop App Download (Once Built)
 
 Desktop app skeleton is in `galaxy-desktop/`.
