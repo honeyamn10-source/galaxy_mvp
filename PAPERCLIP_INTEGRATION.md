@@ -53,6 +53,18 @@ Security:
 - Never commit PAT values.
 - Prefer environment variables or Paperclip secret settings.
 
+### Rotate leaked tokens immediately
+
+If a token was exposed in logs/chat history:
+
+1. Revoke it in GitHub settings immediately.
+2. Create a replacement PAT with `repo` and `workflow` scopes.
+3. Restart Paperclip with the new token loaded:
+
+```bash
+cd /home/honey/mvp && export GITHUB_TOKEN=<new_pat> && npx -y paperclipai run
+```
+
 ## 3) Create Company: Galaxy AI Systems
 
 Use the Paperclip UI at http://localhost:3100:
@@ -100,6 +112,12 @@ In Paperclip UI:
 5. Set budget (example):
    - hourly: `20`
    - daily cap: `150`
+
+Critical adapter setting:
+
+- Ensure the agent is configured to run workflow skills, not a local Claude adapter.
+- If agent details show `adapterType: claude_local`, the run will fail with `Command not found in PATH: "claude"` on machines without Claude CLI.
+- In UI, edit the agent and select the skill-based/workflow execution mode, then keep the three Galaxy skills attached.
 
 ## 6) Create A Sample Goal
 
@@ -169,6 +187,23 @@ npx -y paperclipai run
 - Verify PAT scopes include `repo` and `workflow`.
 - Confirm workflow file names match exactly.
 - Ensure workflow supports dispatch if custom inputs are required.
+
+### Error: `Command not found in PATH: "claude"`
+
+Cause:
+
+- Agent was created with `adapterType: claude_local` and is trying to execute a local CLI instead of `github-api` workflow skills.
+
+Fix:
+
+1. Open the agent settings for `Galaxy DevOps Engineer`.
+2. Change adapter/execution mode away from `claude_local` to the workflow/skills mode.
+3. Verify attached skills are:
+   - `galaxy-autonomous-loop`
+   - `galaxy-pages-deploy`
+   - `galaxy-worker-deploy`
+4. Reassign `GAL-1` to the agent or update the issue to retrigger execution.
+5. Confirm Paperclip activity shows skill execution and GitHub Actions shows a `workflow_dispatch` run.
 
 ### No task/audit entries in Paperclip
 
