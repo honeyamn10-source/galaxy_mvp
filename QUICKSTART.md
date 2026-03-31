@@ -273,7 +273,7 @@ npx -y paperclipai run
 export GITHUB_TOKEN=<your_pat>
 ```
 
-Then open `http://localhost:3100`, create company `Galaxy AI Systems`, attach skills from `.paperclip/skills/`, and assign goals.
+Then open `http://localhost:3100` (or the fallback port printed by Paperclip), create company `Galaxy AI Systems`, attach skills from `.paperclip/skills/`, and assign goals.
 
 Detailed instructions: `PAPERCLIP_INTEGRATION.md`.
 

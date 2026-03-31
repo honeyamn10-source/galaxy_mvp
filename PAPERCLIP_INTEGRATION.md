@@ -13,8 +13,8 @@ npx -y paperclipai run
 
 Expected local endpoints:
 
-- UI: http://localhost:3100
-- API health: http://127.0.0.1:3100/api/health
+- UI: http://localhost:3100 (or next free port, for example 3102)
+- API health: http://127.0.0.1:3100/api/health (or matching fallback port)
 
 Notes:
 
@@ -61,6 +61,10 @@ Use the Paperclip UI at http://localhost:3100:
 2. Click New Company.
 3. Name: `Galaxy AI Systems`.
 4. Save.
+
+CLI note:
+
+- Current Paperclip CLI provides `company list/get/export/import/delete` but no direct `company create` command, so UI creation is the simplest reliable flow.
 
 ## 4) Wrap GitHub Actions As Paperclip Skills
 
@@ -135,6 +139,8 @@ import urllib.request
 print(urllib.request.urlopen('http://127.0.0.1:3100/api/health', timeout=10).read().decode())
 PY
 ```
+
+If port 3100 is occupied, repeat with the port printed by `paperclipai run`.
 
 ## 8) Add New Skills Later
 

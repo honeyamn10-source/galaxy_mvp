@@ -5,6 +5,12 @@ on:
     branches: [ main ]
   pull_request:
     branches: [ main ]
+  workflow_dispatch:
+    inputs:
+      release_note:
+        description: Optional release context for audit trail
+        required: false
+        type: string
 
 permissions:
   contents: read
@@ -89,7 +95,7 @@ jobs:
           if [[ "${{ github.event_name }}" == "pull_request" ]]; then
             echo "cf_branch=pr-${{ github.event.pull_request.number }}" >> "$GITHUB_OUTPUT"
           else
-            echo "cf_branch=main" >> "$GITHUB_OUTPUT"
+            echo "cf_branch=${{ github.ref_name }}" >> "$GITHUB_OUTPUT"
           fi
 
       - name: Build and deploy with retry
@@ -109,6 +115,7 @@ jobs:
         if: always()
         run: |
           echo "## Cloudflare Pages Deployment" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Release note: ${{ github.event.inputs.release_note || 'n/a' }}" >> "$GITHUB_STEP_SUMMARY"
           echo "- Project type: ${{ needs.detect.outputs.project_type }}" >> "$GITHUB_STEP_SUMMARY"
           echo "- App directory: ${{ needs.detect.outputs.app_dir }}" >> "$GITHUB_STEP_SUMMARY"
           echo "- Build command: ${{ needs.detect.outputs.build_command || 'none (static)' }}" >> "$GITHUB_STEP_SUMMARY"

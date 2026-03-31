@@ -212,8 +212,8 @@ npx -y paperclipai run
 
 Paperclip local UI/API:
 
-- UI: `http://localhost:3100`
-- API health: `http://127.0.0.1:3100/api/health`
+- UI: `http://localhost:3100` (or next free port selected by Paperclip)
+- API health: `http://127.0.0.1:3100/api/health` (use matching fallback port if 3100 is busy)
 
 ### Workflow skills
 

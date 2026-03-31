@@ -4,6 +4,11 @@ on:
   schedule:
     - cron: '0 * * * *'
   workflow_dispatch:
+    inputs:
+      goal_description:
+        description: Optional high-level goal context from orchestration layer
+        required: false
+        type: string
 
 permissions:
   contents: write
@@ -25,8 +30,15 @@ jobs:
 
       - name: Decide next improvement
         id: decision
+        env:
+          GOAL_DESCRIPTION: ${{ github.event.inputs.goal_description || '' }}
         run: |
           python scripts/autonomous/decision_engine.py
+
+      - name: Record incoming orchestration goal
+        if: ${{ github.event.inputs.goal_description != '' }}
+        run: |
+          echo "Paperclip goal context: ${{ github.event.inputs.goal_description }}"
 
       - name: Stop when no action is needed
         if: ${{ steps.decision.outputs.action == 'noop' }}
