@@ -7,6 +7,11 @@ on:
       - 'workers/**'
       - '.github/workflows/cloudflare-worker.yml'
   workflow_dispatch:
+    inputs:
+      change_ticket:
+        description: Optional change ticket or goal identifier
+        required: false
+        type: string
 
 permissions:
   contents: read
@@ -82,6 +87,7 @@ jobs:
         run: |
           {
             echo "## Cloudflare Worker Deployment"
+            echo "- Change ticket: ${{ github.event.inputs.change_ticket || 'n/a' }}"
             echo "- Worker path: workers/worker.js"
             echo "- Config: workers/wrangler.toml"
             echo "- Health URL: $WORKER_HEALTHCHECK_URL"
