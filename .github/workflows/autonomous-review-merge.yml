@@ -6,7 +6,7 @@ on:
     types: [opened, synchronize, reopened, ready_for_review]
 
 permissions:
-  contents: read
+  contents: write
   pull-requests: write
 
 jobs:
@@ -77,10 +77,12 @@ jobs:
     if: ${{ needs.autonomous-review.outputs.safe == 'true' }}
     steps:
       - name: Enable PR auto-merge (squash)
-        uses: peter-evans/enable-pull-request-automerge@v3
-        with:
-          token: ${{ secrets.GITHUB_TOKEN }}
-          merge-method: squash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          gh --version
+          gh pr merge "${{ github.event.pull_request.html_url }}" --auto --squash
 
       - name: Post review summary
         uses: actions/github-script@v7
@@ -93,7 +95,7 @@ jobs:
               '- Build validation: pass',
               '- Security scan: pass',
               '- Risk level: low',
-              '- Auto-merge: enabled (squash)'
+              '- Auto-merge: enabled via `gh pr merge --auto --squash`'
             ].join('\n');
             await github.rest.issues.createComment({
               owner: context.repo.owner,
