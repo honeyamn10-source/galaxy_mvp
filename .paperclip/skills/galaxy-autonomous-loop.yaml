@@ -1,0 +1,23 @@
+name: galaxy-autonomous-loop
+description: Triggers the autonomous improvement loop workflow in GitHub Actions.
+inputs:
+  goal_description:
+    type: string
+    description: High-level improvement objective for the autonomous loop.
+  branch_name:
+    type: string
+    description: Branch to run against.
+    default: main
+runs:
+  using: github-api
+  method: POST
+  endpoint: /repos/{owner}/{repo}/actions/workflows/{workflow_id}/dispatches
+  repository: honeyamn10-source/galaxy_mvp
+  owner: honeyamn10-source
+  repo: galaxy_mvp
+  workflow_id: autonomous-loop.yml
+  token_env: GITHUB_TOKEN
+  body:
+    ref: "${{ inputs.branch_name }}"
+    inputs:
+      goal_description: "${{ inputs.goal_description }}"

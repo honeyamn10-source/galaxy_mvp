@@ -258,6 +258,25 @@ Installer includes:
 
 ## Cloud Demo Deployment
 
+## Paperclip Orchestration Quickstart
+
+Use Paperclip as the governance layer for autonomous workflow execution.
+
+```bash
+# Install and initialize once
+npx -y paperclipai onboard --yes
+
+# Start Paperclip locally
+npx -y paperclipai run
+
+# Configure GitHub token (repo + workflow scopes)
+export GITHUB_TOKEN=<your_pat>
+```
+
+Then open `http://localhost:3100`, create company `Galaxy AI Systems`, attach skills from `.paperclip/skills/`, and assign goals.
+
+Detailed instructions: `PAPERCLIP_INTEGRATION.md`.
+
 ```bash
 sudo bash deploy-demo.sh
 ```

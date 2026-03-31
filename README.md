@@ -199,6 +199,42 @@ Installer prompts:
 - RTSP URL (optional)
 - Compliance region
 
+## Paperclip Governance Layer
+
+Paperclip can orchestrate Galaxy autonomous workflows as a control-plane "board of directors".
+
+### Local startup
+
+```bash
+npx -y paperclipai onboard --yes
+npx -y paperclipai run
+```
+
+Paperclip local UI/API:
+
+- UI: `http://localhost:3100`
+- API health: `http://127.0.0.1:3100/api/health`
+
+### Workflow skills
+
+Skill definitions are provided in `.paperclip/skills/`:
+
+- `galaxy-autonomous-loop.yaml`
+- `galaxy-pages-deploy.yaml`
+- `galaxy-worker-deploy.yaml`
+
+Each skill dispatches the corresponding workflow through the GitHub Actions workflow dispatch API.
+
+### Token setup
+
+Set a GitHub PAT with `repo` and `workflow` scopes before running Paperclip-triggered actions:
+
+```bash
+export GITHUB_TOKEN=<your_pat>
+```
+
+Full setup guide: `PAPERCLIP_INTEGRATION.md`
+
 ## Cloudflare Pages Zero-Touch CI/CD
 
 This repository now includes fully automated Cloudflare Pages deployment via GitHub Actions.
