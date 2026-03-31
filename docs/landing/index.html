@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Galaxy MVP</title>
+  <title>Galaxy MVP Download</title>
   <style>
     :root {
       --bg0: #fff7ed;
@@ -124,6 +124,15 @@
       font-size: 0.92rem;
     }
 
+    .demo {
+      margin-top: 20px;
+      background: #fff;
+      border: 1px solid #fdba74;
+      border-radius: 14px;
+      padding: 14px;
+      color: #7c2d12;
+    }
+
     @media (max-width: 900px) {
       .grid { grid-template-columns: 1fr; }
     }
@@ -137,15 +146,21 @@
     </header>
 
     <section class="hero">
-      <h1>Advanced Event Intelligence In A Single Stack</h1>
+      <h1>Deploy Galaxy MVP In Minutes</h1>
       <p>
         Galaxy MVP combines edge detection, P2P event relay, compliance processing,
         predictive risk scoring, and LLM-assisted analysis.
       </p>
       <div class="actions">
         <a class="btn btn-cta" href="../../install-galaxy.sh">Download Installer</a>
+        <a class="btn btn-ghost" href="../../deploy-demo.sh">Cloud Deploy Script</a>
+        <a class="btn btn-ghost" href="../../galaxy-desktop/README.md">Desktop App (Tauri)</a>
         <a class="btn btn-ghost" href="../../QUICKSTART.md">Quickstart</a>
-        <a class="btn btn-ghost" href="../../docs/LLM_QUICKSTART.md">LLM Setup</a>
+        <a class="btn btn-ghost" href="../../.env.example">Custom Model Env Example</a>
+      </div>
+
+      <div class="demo">
+        <strong>Live Demo URL:</strong> https://demo.example.com (replace with your deployment URL)
       </div>
     </section>
 
@@ -167,12 +182,12 @@
         <p>Operators ask natural-language questions and receive contextual responses from system state.</p>
       </article>
       <article class="card">
-        <h3>Download + Run</h3>
-        <p>Use the installer script to pull images, start the stack, and open the dashboard.</p>
+        <h3>One-Click Installer</h3>
+        <p>Interactive installer detects OS, checks ports, pulls GHCR images, writes .env, and opens the dashboard.</p>
       </article>
       <article class="card">
-        <h3>Transparent Architecture</h3>
-        <p>Open docs cover architecture, setup phases, and test flow for reproducible deployment.</p>
+        <h3>Cloud Demo Deployment</h3>
+        <p>Ubuntu deployment script configures Docker + nginx basic auth and exposes a protected public demo endpoint.</p>
       </article>
     </section>
 

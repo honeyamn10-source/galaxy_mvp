@@ -5,6 +5,7 @@ import os
 import random
 import time
 from datetime import datetime, timezone
+from pathlib import Path
 from threading import Event, Lock, Thread
 from typing import Any, Optional
 
@@ -72,6 +73,8 @@ VERIFY_CERT = os.getenv("EDGE_CA_CERT", "/certs/ca.crt")
 CLIENT_CERT = os.getenv("EDGE_CLIENT_CERT", "/certs/edge-planet.crt")
 CLIENT_KEY = os.getenv("EDGE_CLIENT_KEY", "/certs/edge-planet.key")
 REQ_TIMEOUT = float(os.getenv("EDGE_REQUEST_TIMEOUT", "5"))
+RTSP_URL = os.getenv("RTSP_URL", "")
+MODEL_PATH = os.getenv("MODEL_PATH", "/models/default-model.json")
 
 FL_ENABLED = os.getenv("FL_ENABLED", "false").lower() == "true"
 FL_AGGREGATOR_URL = os.getenv("FL_AGGREGATOR_URL", "http://fl-aggregator:8200")
@@ -89,6 +92,9 @@ _fl_thread: Optional[Thread] = None
 _fl_lock = Lock()
 _fl_weights = np.zeros(FL_MODEL_DIM, dtype=np.float32)
 _fl_version = 1
+_custom_model_loaded = False
+_custom_model_name = ""
+_custom_model_error = ""
 
 # Prometheus metrics
 events_sent_counter = Counter('edge_planet_events_sent_total', 'Total events sent to swarm')
@@ -153,6 +159,30 @@ def _mock_local_training(base_weights: np.ndarray) -> tuple[np.ndarray, int]:
     updated = base_weights + grad
     sample_count = random.randint(64, 256)
     return updated, sample_count
+
+
+def _load_custom_model() -> None:
+    global _custom_model_loaded, _custom_model_name, _custom_model_error
+
+    model_file = Path(MODEL_PATH)
+    if not model_file.exists():
+        _custom_model_loaded = False
+        _custom_model_name = ""
+        _custom_model_error = f"model path not found: {MODEL_PATH}"
+        logger.info("No custom model found at %s; using simulator defaults", MODEL_PATH)
+        return
+
+    try:
+        data = json.loads(model_file.read_text(encoding="utf-8"))
+        _custom_model_name = str(data.get("name", model_file.name)) if isinstance(data, dict) else model_file.name
+        _custom_model_loaded = True
+        _custom_model_error = ""
+        logger.info("Loaded custom model metadata from %s (name=%s)", MODEL_PATH, _custom_model_name)
+    except Exception as exc:
+        _custom_model_loaded = False
+        _custom_model_name = ""
+        _custom_model_error = str(exc)
+        logger.warning("Failed loading custom model at %s: %s", MODEL_PATH, exc)
 
 
 def _fetch_global_model() -> None:
@@ -229,6 +259,11 @@ def health() -> dict:
         "status": "ok",
         "service": "edge-planet-simulator",
         "swarm_ingest_url": SWARM_INGEST_URL,
+        "rtsp_url_configured": bool(RTSP_URL),
+        "model_path": MODEL_PATH,
+        "custom_model_loaded": _custom_model_loaded,
+        "custom_model_name": _custom_model_name,
+        "custom_model_error": _custom_model_error,
         "fl_enabled": FL_ENABLED,
         "fl_model_version": _fl_version,
         "time": datetime.now(timezone.utc).isoformat(),
@@ -238,6 +273,7 @@ def health() -> dict:
 @app.on_event("startup")
 def startup() -> None:
     global _fl_thread
+    _load_custom_model()
     if FL_ENABLED and (not _fl_thread or not _fl_thread.is_alive()):
         _fl_stop.clear()
         _fl_thread = Thread(target=_fl_loop, daemon=True)
@@ -362,6 +398,11 @@ def current_config() -> dict:
         "swarm_ingest_url": SWARM_INGEST_URL,
         "default_device_id": DEFAULT_DEVICE_ID,
         "default_location": DEFAULT_LOCATION,
+        "rtsp_url": RTSP_URL,
+        "model_path": MODEL_PATH,
+        "custom_model_loaded": _custom_model_loaded,
+        "custom_model_name": _custom_model_name,
+        "custom_model_error": _custom_model_error,
         "client_cert": CLIENT_CERT,
         "ca_cert": VERIFY_CERT,
         "fl_enabled": FL_ENABLED,

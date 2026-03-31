@@ -1,0 +1,19 @@
+[package]
+name = "galaxy-desktop"
+version = "0.1.0"
+description = "Galaxy desktop launcher"
+authors = ["Galaxy Team"]
+license = "MIT"
+edition = "2021"
+
+[build-dependencies]
+tauri-build = { version = "1.5", features = [] }
+
+[dependencies]
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+tauri = { version = "1.6", features = ["shell-open", "system-tray"] }
+
+[features]
+default = ["custom-protocol"]
+custom-protocol = ["tauri/custom-protocol"]
