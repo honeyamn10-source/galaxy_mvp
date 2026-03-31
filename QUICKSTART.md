@@ -242,6 +242,54 @@ GHCR_OWNER=honeyamn10-source GHCR_TAG=latest CR_PAT=<github_token> ./scripts/pus
 - Runtime config UI: `frontend/configurator.html`
 - Landing page: `docs/landing/index.html`
 
+## One-Click Installer Usage
+
+```bash
+bash install-galaxy.sh
+```
+
+Installer includes:
+
+- Linux/macOS detection
+- Docker install if missing
+- Port availability checks
+- Interactive config for API key, RTSP URL, and compliance region
+- GHCR image pull and dashboard open
+
+## Cloud Demo Deployment
+
+```bash
+sudo bash deploy-demo.sh
+```
+
+Optional credentials override:
+
+```bash
+sudo DEMO_AUTH_USER=admin DEMO_AUTH_PASS='change-me' bash deploy-demo.sh
+```
+
+## Desktop App Download (Once Built)
+
+Desktop app skeleton is in `galaxy-desktop/`.
+
+```bash
+cd galaxy-desktop
+npm install
+npm run tauri build
+```
+
+## Custom AI Models and Real Camera Integration
+
+1. Put your model file in `./models`.
+2. Set `MODEL_PATH` in `.env` to the in-container path (example: `/models/my-model.json`).
+3. Set `RTSP_URL` in `.env` for real camera input.
+
+Use template:
+
+```bash
+cp .env.example .env
+```
+
 ## Need Help?
 
 - Check logs: `docker-compose logs -f backend`

@@ -185,6 +185,64 @@ make llm-up
 make test-llm
 ```
 
+## One-Click Installer
+
+Use the interactive installer to detect OS, validate ports, configure runtime values, pull GHCR images, and start the stack.
+
+```bash
+bash install-galaxy.sh
+```
+
+Installer prompts:
+
+- Edge API key
+- RTSP URL (optional)
+- Compliance region
+
+## Cloud Demo Deployment (Ubuntu 22.04)
+
+Use the demo deployment script on a fresh VM. It installs Docker, deploys the stack, and configures nginx basic auth.
+
+```bash
+sudo bash deploy-demo.sh
+```
+
+Environment overrides:
+
+```bash
+sudo DEMO_AUTH_USER=admin DEMO_AUTH_PASS='strong-password' bash deploy-demo.sh
+```
+
+## Desktop App (Tauri Skeleton)
+
+A desktop launcher skeleton is available in [galaxy-desktop](galaxy-desktop).
+
+```bash
+cd galaxy-desktop
+npm install
+npm run tauri dev
+```
+
+It provides:
+
+- Embedded dashboard webview
+- Tray actions to start/stop stack
+- Dashboard open action
+
+## Custom AI Models and Real Cameras
+
+Edge service supports mounted models and optional RTSP input configuration through env vars.
+
+- Model mount path: `./models` on host -> `/models` in container
+- Active model env: `MODEL_PATH`
+- Camera source env: `RTSP_URL`
+
+Create `.env` from [.env.example](.env.example) and set values:
+
+```bash
+cp .env.example .env
+```
+
 ## Configuration Reference
 
 All runtime configuration is environment-driven. Main references are in [docker-compose.yml](docker-compose.yml) and [k8s/configmaps.yaml](k8s/configmaps.yaml).

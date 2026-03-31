@@ -1,0 +1,33 @@
+{
+  "build": {
+    "beforeDevCommand": "npm run dev",
+    "beforeBuildCommand": "npm run build",
+    "devPath": "http://localhost:5173",
+    "distDir": "../dist"
+  },
+  "package": {
+    "productName": "Galaxy Desktop",
+    "version": "0.1.0"
+  },
+  "tauri": {
+    "allowlist": {
+      "all": false,
+      "shell": {
+        "open": true
+      }
+    },
+    "bundle": {
+      "active": true,
+      "identifier": "com.galaxy.desktop",
+      "targets": "all"
+    },
+    "windows": [
+      {
+        "title": "Galaxy Desktop",
+        "width": 1280,
+        "height": 860,
+        "resizable": true
+      }
+    ]
+  }
+}
