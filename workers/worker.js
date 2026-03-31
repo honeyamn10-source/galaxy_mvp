@@ -18,9 +18,13 @@ export default {
 
     if (url.pathname === "/ai/chat" && request.method === "POST") {
       const payload = await request.json().catch(() => ({}));
-      const prompt = String(payload.prompt || "").trim();
+      const prompt = sanitizePrompt(payload.prompt);
       if (!prompt) {
         return json({ error: "prompt is required" }, 400);
+      }
+
+      if (prompt.length > 500) {
+        return json({ error: "prompt too long" }, 400);
       }
 
       if (env.HF_API_TOKEN) {
@@ -47,6 +51,12 @@ export default {
     return json({ error: "not found" }, 404);
   }
 };
+
+function sanitizePrompt(input) {
+  return String(input || "")
+    .replace(/[<>\u0000-\u001F\u007F]/g, " ")
+    .trim();
+}
 
 function json(body, status = 200) {
   return new Response(JSON.stringify(body), {
