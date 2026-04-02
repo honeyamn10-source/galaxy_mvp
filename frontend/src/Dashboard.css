@@ -106,7 +106,7 @@ body {
 .stat-card h3 {
   font-size: 0.9rem;
   font-weight: 600;
-  color: #a0a0a0;
+  color: #d0d0e0;
   margin-bottom: 1rem;
   text-transform: uppercase;
   letter-spacing: 0.05em;
@@ -148,7 +148,7 @@ body {
 .empty-state {
   text-align: center;
   padding: 3rem 2rem;
-  color: #808080;
+  color: #c0c0d0;
   background: rgba(255, 255, 255, 0.02);
   border-radius: 12px;
   border: 1px dashed rgba(255, 255, 255, 0.1);
@@ -172,7 +172,7 @@ body {
   padding: 1rem;
   text-align: left;
   font-weight: 600;
-  color: #a0a0a0;
+  color: #d0d0e0;
   text-transform: uppercase;
   font-size: 0.8rem;
   letter-spacing: 0.05em;
@@ -316,7 +316,7 @@ body {
 }
 
 .auth-box p {
-  color: #a0a0a0;
+  color: #d0d0e0;
   margin-bottom: 2rem;
 }
 
@@ -338,7 +338,7 @@ body {
 }
 
 .input-field::placeholder {
-  color: #606060;
+  color: #a0a0c8;
 }
 
 /* ========== ACTIONS ========== */
