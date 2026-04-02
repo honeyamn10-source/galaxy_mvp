@@ -16,9 +16,11 @@ import os
 from typing import Optional
 
 import requests
-from fastapi import FastAPI, HTTPException
+from fastapi import Depends, FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
+
+from shared.auth_middleware import require_request_context
 
 logging.basicConfig(level=os.getenv("LOG_LEVEL", "INFO"))
 logger = logging.getLogger("llm-service")
@@ -171,7 +173,7 @@ def health() -> HealthResponse:
 
 
 @app.post("/analyze_event", response_model=EventAnalysisResponse)
-def analyze_event(req: EventAnalysisRequest) -> EventAnalysisResponse:
+def analyze_event(req: EventAnalysisRequest, _: dict = Depends(require_request_context)) -> EventAnalysisResponse:
     """
     Analyze an event for authenticity using LLM.
 
@@ -269,7 +271,7 @@ JSON response only, no other text."""
 
 
 @app.post("/chat", response_model=ChatResponse)
-def chat(req: ChatRequest) -> ChatResponse:
+def chat(req: ChatRequest, _: dict = Depends(require_request_context)) -> ChatResponse:
     """
     Chat endpoint for general questions.
 

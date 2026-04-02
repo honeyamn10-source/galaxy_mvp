@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { motion } from 'framer-motion';
 import GalaxyView from './GalaxyView';
+import { authFetch } from './auth';
 import './Dashboard.css';
 
 const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:1317';
@@ -31,11 +32,11 @@ function mapWsEvent(rawMessage) {
       verified: status === 'verified',
     };
   } catch {
-    return null;
+    return null
   }
 }
 
-export default function Dashboard() {
+export default function Dashboard({ user, onLogout }) {
   const [events, setEvents] = useState([]);
   const [predictions, setPredictions] = useState([]);
   const [status, setStatus] = useState({ authority: 'unknown', edge: 'unknown', websocket: 'unknown' });
@@ -65,7 +66,7 @@ export default function Dashboard() {
 
   const fetchEvents = async () => {
     try {
-      const response = await fetch(`${API_BASE_URL}/galaxy/v1/events?limit=50`);
+      const response = await authFetch(`${API_BASE_URL}/galaxy/v1/events?limit=50`);
       if (!response.ok) {
         throw new Error(`authority status ${response.status}`);
       }
@@ -80,7 +81,7 @@ export default function Dashboard() {
 
   const fetchPredictions = async () => {
     try {
-      const response = await fetch(`${PREDICTIVE_BASE_URL}/predictions/latest`);
+      const response = await authFetch(`${PREDICTIVE_BASE_URL}/predictions/latest`);
       if (!response.ok) {
         return;
       }
@@ -93,7 +94,7 @@ export default function Dashboard() {
 
   const checkHealth = async () => {
     try {
-      const authorityResponse = await fetch(`${API_BASE_URL}/health`);
+      const authorityResponse = await authFetch(`${API_BASE_URL}/health`);
       setStatus((current) => ({ ...current, authority: authorityResponse.ok ? 'ok' : 'error' }));
     } catch {
       setStatus((current) => ({ ...current, authority: 'error' }));
@@ -124,7 +125,7 @@ export default function Dashboard() {
     };
 
     try {
-      const response = await fetch(`${API_BASE_URL}/galaxy/v1/events`, {
+      const response = await authFetch(`${API_BASE_URL}/galaxy/v1/events`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
@@ -151,7 +152,7 @@ export default function Dashboard() {
     setChatLoading(true);
 
     try {
-      const response = await fetch(`${LLM_BASE_URL}/chat`, {
+      const response = await authFetch(`${LLM_BASE_URL}/chat`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ question: userMessage }),
@@ -187,7 +188,9 @@ export default function Dashboard() {
 
   useEffect(() => {
     try {
-      const ws = new WebSocket(WS_URL);
+      const token = sessionStorage.getItem('access_token') || '';
+      const url = token ? `${WS_URL}${WS_URL.includes('?') ? '&' : '?'}token=${encodeURIComponent(token)}` : WS_URL;
+      const ws = new WebSocket(url);
       wsRef.current = ws;
 
       ws.onopen = () => {
@@ -244,7 +247,11 @@ export default function Dashboard() {
             <span className={`status-pill ${status.edge === 'ok' ? 'ok' : 'bad'}`}>Edge {status.edge}</span>
             <span className={`status-pill ${status.websocket === 'ok' ? 'ok' : 'bad'}`}>WS {status.websocket}</span>
           </div>
+          <div className="status-note">Org: {user?.org_id || 'unknown'} · Role: {user?.role || 'viewer'}</div>
           <div className="status-note">REST: {API_BASE_URL}</div>
+          <button className="btn btn-secondary" type="button" onClick={onLogout} style={{ marginTop: 12 }}>
+            Sign out
+          </button>
         </div>
       </header>
 

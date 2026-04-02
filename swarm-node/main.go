@@ -726,6 +726,7 @@ func (a *App) forwardToBackend(ctx context.Context, env SwarmEnvelope) error {
 func (a *App) forwardToValidatorREST(ctx context.Context, env SwarmEnvelope) error {
 	payload := map[string]any{
 		"creator":        a.cfg.CreatorAddress,
+		"api_key":        env.APIKey,
 		"device_id":      env.Event.DeviceID,
 		"event_type":     env.Event.EventType,
 		"confidence":     uint64(env.Event.Confidence * 100),
@@ -747,6 +748,9 @@ func (a *App) forwardToValidatorREST(ctx context.Context, env SwarmEnvelope) err
 		return fmt.Errorf("create validator request: %w", err)
 	}
 	req.Header.Set("Content-Type", "application/json")
+	if internalKey := os.Getenv("INTERNAL_API_KEY"); internalKey != "" {
+		req.Header.Set("X-Internal-Auth", internalKey)
+	}
 
 	resp, err := a.httpClient.Do(req)
 	if err != nil {

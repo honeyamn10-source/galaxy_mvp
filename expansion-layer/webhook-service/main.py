@@ -26,6 +26,7 @@ POLL_INTERVAL_SECONDS = int(os.getenv("WEBHOOK_POLL_INTERVAL_SECONDS", "5"))
 REQUEST_TIMEOUT = float(os.getenv("WEBHOOK_REQUEST_TIMEOUT", "5"))
 MAX_RETRIES = int(os.getenv("WEBHOOK_MAX_RETRIES", "4"))
 BACKOFF_BASE_SECONDS = float(os.getenv("WEBHOOK_BACKOFF_BASE_SECONDS", "0.5"))
+INTERNAL_API_KEY = os.getenv("INTERNAL_API_KEY", "")
 
 _stop = threading.Event()
 _worker: threading.Thread | None = None
@@ -220,7 +221,12 @@ def _deliver_one(subscription: dict[str, Any], event: dict[str, Any], policy: Re
 
 def _fetch_events() -> list[dict[str, Any]]:
     try:
-        resp = requests.get(AUTHORITY_EVENTS_URL, params={"limit": 200}, timeout=REQUEST_TIMEOUT)
+        resp = requests.get(
+            AUTHORITY_EVENTS_URL,
+            params={"limit": 200},
+            headers={"X-Internal-Auth": INTERNAL_API_KEY} if INTERNAL_API_KEY else None,
+            timeout=REQUEST_TIMEOUT,
+        )
         if resp.status_code == 200:
             return resp.json().get("events", [])
         logger.warning("authority query returned status=%s", resp.status_code)
