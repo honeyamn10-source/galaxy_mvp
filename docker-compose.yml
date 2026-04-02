@@ -298,20 +298,16 @@ services:
       timeout: 5s
       retries: 10
 
-  # LLM Service - wraps Ollama API for event analysis and chat
-  # Prerequisites: Ollama running (host or container) with deepseek-llm:6.7b pulled
-  # On Docker Desktop: use 'host.docker.internal:11434' for host Ollama
-  # On Linux: use '172.17.0.1:11434' for gateway IP, or run Ollama in a container and link it
+  # LLM Service - uses OpenRouter for chat and event classification
   llm-service:
     build: ./llm-service
     container_name: galaxy-llm-service
     environment:
-      # Point to Ollama running on the host (Docker Desktop)
-      # For Linux host, use '172.17.0.1:11434' or run Ollama in a container
-      # For Ollama container on same network, use 'ollama:11434'
-      OLLAMA_URL: http://host.docker.internal:11434
-      OLLAMA_MODEL: deepseek-llm:6.7b
-      OLLAMA_TIMEOUT: "60"
+      OPENROUTER_API_KEYS: ${OPENROUTER_API_KEYS:-}
+      OPENROUTER_MODEL: ${OPENROUTER_MODEL:-openai/gpt-3.5-turbo}
+      OPENROUTER_TIMEOUT: "30"
+      OPENROUTER_SITE_URL: ${OPENROUTER_SITE_URL:-http://localhost}
+      OPENROUTER_APP_NAME: ${OPENROUTER_APP_NAME:-galaxy-mvp}
       LLM_ENABLED: "true"
       LLM_PORT: "8600"
       LLM_HOST: "0.0.0.0"
@@ -326,8 +322,6 @@ services:
       interval: 30s
       timeout: 10s
       retries: 5
-    # Note: The LLM service doesn't depend on other services; it can start independently
-    # Comment out this section if running Ollama on the host via Docker Desktop
 
   frontend:
     build:
