@@ -56,6 +56,42 @@ input::placeholder, textarea::placeholder {
   color: var(--text-tertiary);
 }
 
+select,
+option {
+  background-color: #1e1e2e !important;
+  color: #e0e0f0 !important;
+  border-color: #6c5ce7 !important;
+}
+
+select:focus,
+option:focus {
+  outline: none;
+}
+
+.otp-container,
+.auth-box,
+.verify-otp-card {
+  background: #11111c !important;
+  color: #e0e0f0 !important;
+}
+
+.otp-container input,
+.auth-box input,
+.verify-otp-card input,
+.otp-container .form-input,
+.auth-box .form-input,
+.verify-otp-card .form-input {
+  background: #1a1a2e !important;
+  color: #ffffff !important;
+  border: 1px solid #6c5ce7 !important;
+}
+
+.otp-container button,
+.auth-box button,
+.verify-otp-card button {
+  color: #ffffff;
+}
+
 /* ========== DASHBOARD SHELL ========== */
 
 .dashboard-shell {

@@ -1,10 +1,9 @@
 import json
 import logging
 import os
-import random
 import re
 import threading
-from typing import Any, Optional
+from typing import Any, Optional, cast
 
 import httpx
 from fastapi import FastAPI, HTTPException
@@ -94,13 +93,17 @@ def _next_key() -> Optional[str]:
     return key
 
 
-async def call_openrouter(prompt: str, max_tokens: int = 200) -> tuple[Optional[str], Optional[str]]:
+async def call_openrouter(
+    prompt: str,
+    max_tokens: int = 200,
+    system_prompt: Optional[str] = None,
+) -> tuple[Optional[str], Optional[str]]:
     if not LLM_ENABLED:
         return None, "llm disabled"
     if not _api_keys:
         return None, "no openrouter api keys configured"
 
-    tried = []
+    tried: list[str] = []
     async with httpx.AsyncClient(timeout=OPENROUTER_TIMEOUT) as client:
         for _ in range(len(_api_keys)):
             key = _next_key()
@@ -109,6 +112,11 @@ async def call_openrouter(prompt: str, max_tokens: int = 200) -> tuple[Optional[
             tried.append(key[:10] + "...")
 
             try:
+                messages: list[dict[str, str]] = []
+                if system_prompt:
+                    messages.append({"role": "system", "content": system_prompt})
+                messages.append({"role": "user", "content": prompt})
+
                 response = await client.post(
                     f"{OPENROUTER_BASE_URL}/chat/completions",
                     headers={
@@ -119,7 +127,7 @@ async def call_openrouter(prompt: str, max_tokens: int = 200) -> tuple[Optional[
                     },
                     json={
                         "model": OPENROUTER_MODEL,
-                        "messages": [{"role": "user", "content": prompt}],
+                        "messages": messages,
                         "max_tokens": max_tokens,
                     },
                 )
@@ -141,9 +149,8 @@ def _extract_json_block(text: str) -> Optional[dict[str, Any]]:
     if not match:
         return None
     try:
-        parsed = json.loads(match.group())
-        if isinstance(parsed, dict):
-            return parsed
+        parsed = cast(dict[str, Any], json.loads(match.group()))
+        return parsed
     except json.JSONDecodeError:
         return None
     return None
@@ -268,7 +275,13 @@ async def chat(req: ChatRequest) -> ChatResponse:
 
     logger.info("Chat request: %s", question[:100])
 
-    content, error = await call_openrouter(prompt)
+    system_prompt = (
+        "You are the Galaxy MVP assistant. Answer only questions about the Galaxy MVP platform, "
+        "including its dashboard, auth flow, integrations, devices, deployments, and documentation. "
+        "If the user asks about anything outside Galaxy MVP, reply briefly that you can only help with Galaxy MVP topics."
+    )
+
+    content, error = await call_openrouter(prompt, system_prompt=system_prompt)
 
     if not content:
         return ChatResponse(answer=f"LLM fallback response: {error or 'service unavailable'}", model="fallback")

@@ -42,6 +42,7 @@ SMTP_USER = os.getenv("SMTP_USER", "")
 SMTP_PASSWORD = os.getenv("SMTP_PASSWORD", "")
 SMTP_FROM = os.getenv("SMTP_FROM", SMTP_USER or "no-reply@galaxy.local")
 OTP_TTL_MINUTES = int(os.getenv("OTP_TTL_MINUTES", "10"))
+ENVIRONMENT = os.getenv("ENVIRONMENT", "production").lower()
 
 engine = create_engine(DATABASE_URL, pool_pre_ping=True)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
@@ -257,7 +258,10 @@ def _generate_otp() -> str:
 
 def _send_otp_email(email: str, otp_code: str) -> bool:
     if not (SMTP_HOST and SMTP_USER and SMTP_PASSWORD):
-        print(f"[auth-service] OTP fallback email={email} otp={otp_code}")
+        if ENVIRONMENT == "development":
+            print(f"[auth-service] OTP fallback email={email} otp={otp_code}")
+        else:
+            print(f"[auth-service] SMTP not configured; OTP email could not be sent for {email}")
         return False
 
     msg = EmailMessage()
@@ -318,7 +322,7 @@ def register(req: RegisterReq, request: Request, db: Session = Depends(get_db)):
     return RegisterResponse(
         message="OTP sent to email",
         requires_otp=True,
-        dev_otp=None if sent_via_smtp else otp_code,
+        dev_otp=otp_code if (not sent_via_smtp and ENVIRONMENT == "development") else None,
     )
 
 
@@ -392,7 +396,7 @@ def resend_otp(req: ResendOtpReq, request: Request, db: Session = Depends(get_db
     return RegisterResponse(
         message="OTP sent to email",
         requires_otp=True,
-        dev_otp=None if sent_via_smtp else user.otp_code,
+        dev_otp=user.otp_code if (not sent_via_smtp and ENVIRONMENT == "development") else None,
     )
 
 

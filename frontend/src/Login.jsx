@@ -66,7 +66,7 @@ export default function Login({ onLogin }) {
 
   return (
     <div className="dashboard-shell" style={{ minHeight: '100vh', display: 'grid', placeItems: 'center' }}>
-      <div className="panel" style={{ maxWidth: 420, width: '100%' }}>
+      <div className={`panel ${mode === 'otp' ? 'verify-otp-card' : 'auth-box'}`} style={{ maxWidth: 420, width: '100%' }}>
         <div className="panel-header">
           <h2>{mode === 'login' ? 'Sign in' : mode === 'otp' ? 'Verify OTP' : 'Register'}</h2>
           <p>{mode === 'login' ? 'Use your workspace account.' : mode === 'otp' ? 'Enter the code sent to your inbox.' : 'Create a new organization.'}</p>
@@ -87,7 +87,7 @@ export default function Login({ onLogin }) {
             </>
           )}
           {notice ? <div className="muted" style={{ color: '#e0e0ff' }}>{notice}</div> : null}
-          {devOtp ? <div className="muted" style={{ color: '#e0e0ff' }}>Dev OTP: {devOtp}</div> : null}
+          {devOtp && mode === 'otp' ? <div className="muted" style={{ color: '#e0e0ff' }}>Development OTP available in local console only.</div> : null}
           {error ? <div className="muted" style={{ color: '#f88' }}>{error}</div> : null}
           {mode !== 'otp' ? (
             <>
