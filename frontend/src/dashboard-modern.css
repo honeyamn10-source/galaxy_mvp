@@ -10,7 +10,7 @@
   
   /* Text colors */
   --text-primary: #ffffff;
-  --text-secondary: #c0c0e0;
+  --text-secondary: #e0e0ff;
   --text-tertiary: #8080a0;
   
   /* Accent colors */
@@ -262,6 +262,16 @@ input::placeholder, textarea::placeholder {
   padding: 1.5rem;
   transition: all 0.3s ease;
   animation: fadeInUp 0.6s ease-out backwards;
+  position: relative;
+}
+
+.panel::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: 16px;
+  pointer-events: none;
+  background: radial-gradient(circle at 20% 0%, rgba(108, 92, 231, 0.08), transparent 55%);
 }
 
 .panel:hover {
@@ -457,7 +467,7 @@ input::placeholder, textarea::placeholder {
 }
 
 .event-card > div {
-  color: var(--text-secondary);
+  color: #e0e0ff;
   line-height: 1.5;
 }
 
@@ -509,7 +519,7 @@ input::placeholder, textarea::placeholder {
 .chat-message.assistant {
   background: rgba(0, 212, 255, 0.1);
   border-left: 3px solid var(--accent-cyan);
-  color: var(--text-secondary);
+  color: #e0e0ff;
   margin-right: 1rem;
 }
 
@@ -531,6 +541,30 @@ input::placeholder, textarea::placeholder {
 .galaxy-panel {
   grid-column: 1 / -1;
   min-height: 400px;
+}
+
+.galaxy-view {
+  width: 100%;
+  min-height: 420px;
+  border-radius: 12px;
+  overflow: hidden;
+  border: 1px solid rgba(108, 92, 231, 0.25);
+  background: radial-gradient(circle at 50% 40%, rgba(108, 92, 231, 0.1), rgba(10, 10, 26, 0.55));
+}
+
+.galaxy-panel.fullscreen {
+  position: fixed;
+  inset: 18px;
+  z-index: 2000;
+  margin: 0;
+  background: rgba(8, 8, 24, 0.96);
+  border-color: rgba(108, 92, 231, 0.45);
+  box-shadow: 0 0 42px rgba(108, 92, 231, 0.28);
+  animation: fadeIn 0.25s ease-out;
+}
+
+.galaxy-panel.fullscreen .galaxy-view {
+  min-height: calc(100vh - 160px);
 }
 
 .galaxy-panel > svg {

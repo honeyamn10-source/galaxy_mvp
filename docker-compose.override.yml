@@ -1,0 +1,8 @@
+services:
+  edge-planet:
+    environment:
+      RTSP_URL: rtsp://username:password@camera-ip:554/stream
+      EDGE_DEVICE_ID: camera-lobby-01
+      REAL_INFERENCE_URL: http://real-inference:9000/infer
+      CAMERA_POLL_INTERVAL_SECONDS: 1.0
+      CAMERA_MIN_CONFIDENCE: 0.75

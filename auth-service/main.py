@@ -1,9 +1,12 @@
 import hashlib
 import os
+import random
+import smtplib
 import threading
 import uuid
 from collections import defaultdict, deque
 from datetime import datetime, timedelta, timezone
+from email.message import EmailMessage
 
 import bcrypt
 import jwt
@@ -11,7 +14,7 @@ from fastapi import Depends, FastAPI, Header, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from pydantic import BaseModel, EmailStr, Field
-from sqlalchemy import Boolean, Column, DateTime, String, create_engine
+from sqlalchemy import Boolean, Column, DateTime, String, create_engine, inspect, text
 from sqlalchemy.orm import Session, declarative_base, sessionmaker
 
 app = FastAPI(title="Galaxy Auth Service")
@@ -33,6 +36,12 @@ DEFAULT_ADMIN_PASSWORD = os.getenv("DEFAULT_ADMIN_PASSWORD", "Test1234!")
 DEFAULT_ADMIN_ORG_NAME = os.getenv("DEFAULT_ADMIN_ORG_NAME", "Test Corp")
 DEFAULT_EDGE_API_KEY = os.getenv("DEFAULT_EDGE_API_KEY", "edge-planet-local")
 DEFAULT_EDGE_ORG_NAME = os.getenv("DEFAULT_EDGE_ORG_NAME", "Edge Demo")
+SMTP_HOST = os.getenv("SMTP_HOST", "")
+SMTP_PORT = int(os.getenv("SMTP_PORT", "587"))
+SMTP_USER = os.getenv("SMTP_USER", "")
+SMTP_PASSWORD = os.getenv("SMTP_PASSWORD", "")
+SMTP_FROM = os.getenv("SMTP_FROM", SMTP_USER or "no-reply@galaxy.local")
+OTP_TTL_MINUTES = int(os.getenv("OTP_TTL_MINUTES", "10"))
 
 engine = create_engine(DATABASE_URL, pool_pre_ping=True)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
@@ -61,6 +70,9 @@ class User(Base):
     org_id = Column(String, nullable=False, index=True)
     role = Column(String, default="viewer")
     is_active = Column(Boolean, default=True)
+    email_verified = Column(Boolean, default=False)
+    otp_code = Column(String, nullable=True)
+    otp_expires_at = Column(DateTime, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
 
 
@@ -89,6 +101,21 @@ class RegisterReq(BaseModel):
 class LoginReq(BaseModel):
     email: EmailStr
     password: str
+
+
+class VerifyOtpReq(BaseModel):
+    email: EmailStr
+    otp: str = Field(min_length=4, max_length=12)
+
+
+class ResendOtpReq(BaseModel):
+    email: EmailStr
+
+
+class RegisterResponse(BaseModel):
+    message: str
+    requires_otp: bool = True
+    dev_otp: str | None = None
 
 
 class CreateApiKeyReq(BaseModel):
@@ -206,8 +233,51 @@ def _seed_defaults(db: Session) -> None:
     db.commit()
 
 
+def _migrate_schema() -> None:
+    inspector = inspect(engine)
+    columns = {col["name"] for col in inspector.get_columns("users")}
+    ddl: list[str] = []
+    if "email_verified" not in columns:
+        ddl.append("ALTER TABLE users ADD COLUMN email_verified BOOLEAN DEFAULT FALSE")
+    if "otp_code" not in columns:
+        ddl.append("ALTER TABLE users ADD COLUMN otp_code VARCHAR")
+    if "otp_expires_at" not in columns:
+        ddl.append("ALTER TABLE users ADD COLUMN otp_expires_at TIMESTAMP")
+    if not ddl:
+        return
+
+    with engine.begin() as conn:
+        for statement in ddl:
+            conn.execute(text(statement))
+
+
+def _generate_otp() -> str:
+    return f"{random.randint(0, 999999):06d}"
+
+
+def _send_otp_email(email: str, otp_code: str) -> bool:
+    if not (SMTP_HOST and SMTP_USER and SMTP_PASSWORD):
+        print(f"[auth-service] OTP fallback email={email} otp={otp_code}")
+        return False
+
+    msg = EmailMessage()
+    msg["Subject"] = "Your Galaxy OTP Code"
+    msg["From"] = SMTP_FROM
+    msg["To"] = email
+    msg.set_content(
+        f"Your Galaxy verification code is {otp_code}. It expires in {OTP_TTL_MINUTES} minutes."
+    )
+
+    with smtplib.SMTP(SMTP_HOST, SMTP_PORT, timeout=10) as smtp:
+        smtp.starttls()
+        smtp.login(SMTP_USER, SMTP_PASSWORD)
+        smtp.send_message(msg)
+    return True
+
+
 @app.on_event("startup")
 def startup() -> None:
+    _migrate_schema()
     with SessionLocal() as db:
         _seed_defaults(db)
 
@@ -217,7 +287,7 @@ def health() -> dict:
     return {"status": "ok", "service": "auth"}
 
 
-@app.post("/auth/register", response_model=TokenResponse)
+@app.post("/auth/register", response_model=RegisterResponse)
 def register(req: RegisterReq, request: Request, db: Session = Depends(get_db)):
     _rate_limited(request, "register", limit=5, window_seconds=60)
 
@@ -228,18 +298,27 @@ def register(req: RegisterReq, request: Request, db: Session = Depends(get_db)):
     db.add(org)
     db.flush()
 
-    user = User(email=req.email, hashed_password=hash_pw(req.password), org_id=org.id, role="admin")
+    otp_code = _generate_otp()
+    expires_at = datetime.utcnow() + timedelta(minutes=OTP_TTL_MINUTES)
+
+    user = User(
+        email=req.email,
+        hashed_password=hash_pw(req.password),
+        org_id=org.id,
+        role="admin",
+        is_active=False,
+        email_verified=False,
+        otp_code=otp_code,
+        otp_expires_at=expires_at,
+    )
     db.add(user)
     db.commit()
-    db.refresh(user)
 
-    token_data = {"sub": user.id, "org_id": org.id, "role": user.role, "email": user.email}
-    return TokenResponse(
-        access_token=make_token(token_data, minutes=ACCESS_EXP_MIN),
-        refresh_token=make_token(token_data, days=REFRESH_EXP_DAYS, token_type="refresh"),
-        user_id=user.id,
-        org_id=org.id,
-        role=user.role,
+    sent_via_smtp = _send_otp_email(req.email, otp_code)
+    return RegisterResponse(
+        message="OTP sent to email",
+        requires_otp=True,
+        dev_otp=None if sent_via_smtp else otp_code,
     )
 
 
@@ -250,6 +329,8 @@ def login(req: LoginReq, request: Request, db: Session = Depends(get_db)):
     user = db.query(User).filter(User.email == req.email, User.is_active == True).first()
     if not user or not verify_pw(req.password, user.hashed_password):
         raise HTTPException(status_code=401, detail="Invalid credentials")
+    if not user.email_verified:
+        raise HTTPException(status_code=403, detail="Email not verified")
 
     token_data = {"sub": user.id, "org_id": user.org_id, "role": user.role, "email": user.email}
     return TokenResponse(
@@ -258,6 +339,60 @@ def login(req: LoginReq, request: Request, db: Session = Depends(get_db)):
         user_id=user.id,
         org_id=user.org_id,
         role=user.role,
+    )
+
+
+@app.post("/auth/verify-otp", response_model=TokenResponse)
+def verify_otp(req: VerifyOtpReq, request: Request, db: Session = Depends(get_db)):
+    _rate_limited(request, "verify-otp", limit=10, window_seconds=60)
+
+    user = db.query(User).filter(User.email == req.email).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    if user.email_verified:
+        raise HTTPException(status_code=409, detail="Email already verified")
+    if not user.otp_code or not user.otp_expires_at:
+        raise HTTPException(status_code=400, detail="OTP not generated")
+    if datetime.utcnow() > user.otp_expires_at:
+        raise HTTPException(status_code=400, detail="OTP expired")
+    if req.otp.strip() != user.otp_code:
+        raise HTTPException(status_code=401, detail="Invalid OTP")
+
+    user.email_verified = True
+    user.is_active = True
+    user.otp_code = None
+    user.otp_expires_at = None
+    db.commit()
+
+    token_data = {"sub": user.id, "org_id": user.org_id, "role": user.role, "email": user.email}
+    return TokenResponse(
+        access_token=make_token(token_data, minutes=ACCESS_EXP_MIN),
+        refresh_token=make_token(token_data, days=REFRESH_EXP_DAYS, token_type="refresh"),
+        user_id=user.id,
+        org_id=user.org_id,
+        role=user.role,
+    )
+
+
+@app.post("/auth/resend-otp", response_model=RegisterResponse)
+def resend_otp(req: ResendOtpReq, request: Request, db: Session = Depends(get_db)):
+    _rate_limited(request, "resend-otp", limit=5, window_seconds=60)
+
+    user = db.query(User).filter(User.email == req.email).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    if user.email_verified:
+        raise HTTPException(status_code=409, detail="Email already verified")
+
+    user.otp_code = _generate_otp()
+    user.otp_expires_at = datetime.utcnow() + timedelta(minutes=OTP_TTL_MINUTES)
+    db.commit()
+
+    sent_via_smtp = _send_otp_email(user.email, user.otp_code)
+    return RegisterResponse(
+        message="OTP sent to email",
+        requires_otp=True,
+        dev_otp=None if sent_via_smtp else user.otp_code,
     )
 
 

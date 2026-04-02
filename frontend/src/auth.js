@@ -39,7 +39,33 @@ export async function register(email, password, org_name) {
   if (!response.ok) {
     throw new Error(data.detail || 'Registration failed');
   }
+  return data;
+}
+
+export async function verifyOtp(email, otp) {
+  const response = await fetch(`${AUTH_URL}/auth/verify-otp`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ email, otp }),
+  });
+  const data = await response.json();
+  if (!response.ok) {
+    throw new Error(data.detail || 'OTP verification failed');
+  }
   storeTokens(data);
+  return data;
+}
+
+export async function resendOtp(email) {
+  const response = await fetch(`${AUTH_URL}/auth/resend-otp`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ email }),
+  });
+  const data = await response.json();
+  if (!response.ok) {
+    throw new Error(data.detail || 'OTP resend failed');
+  }
   return data;
 }
 
