@@ -2,6 +2,11 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { motion } from 'framer-motion';
 import GalaxyView from './GalaxyView';
 import { authFetch } from './auth';
+import ClientPanel from './components/ClientPanel';
+import DeviceManager from './components/DeviceManager';
+import AlertSettings from './components/AlertSettings';
+import ReportDownload from './components/ReportDownload';
+import PricingModal from './components/PricingModal';
 import './Dashboard.css';
 
 const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:1317';
@@ -50,6 +55,8 @@ export default function Dashboard({ user, onLogout }) {
   const [chatMessages, setChatMessages] = useState([]);
   const [chatInput, setChatInput] = useState('');
   const [chatLoading, setChatLoading] = useState(false);
+  const [selectedPlan, setSelectedPlan] = useState('starter');
+  const [showPricingModal, setShowPricingModal] = useState(false);
   const wsRef = useRef(null);
 
   const metrics = useMemo(() => {
@@ -274,6 +281,13 @@ export default function Dashboard({ user, onLogout }) {
         </motion.article>
       </section>
 
+      <ClientPanel
+        user={user}
+        plan={selectedPlan}
+        metrics={metrics}
+        onManagePlan={() => setShowPricingModal(true)}
+      />
+
       <section className="grid-layout">
         <div className="panel galaxy-panel">
           <div className="panel-header">
@@ -330,6 +344,10 @@ export default function Dashboard({ user, onLogout }) {
       </section>
 
       <section className="grid-layout single-column">
+        <DeviceManager events={events} />
+
+        <AlertSettings />
+
         <div className="panel">
           <div className="panel-header">
             <h2>Live Events</h2>
@@ -383,6 +401,10 @@ export default function Dashboard({ user, onLogout }) {
         </div>
       </section>
 
+      <section className="grid-layout single-column">
+        <ReportDownload events={events} predictions={predictions} />
+      </section>
+
       <section className="panel chat-panel">
         <div className="panel-header">
           <h2>LLM Chat Assistant</h2>
@@ -413,6 +435,16 @@ export default function Dashboard({ user, onLogout }) {
           </button>
         </div>
       </section>
+
+      <PricingModal
+        open={showPricingModal}
+        currentPlan={selectedPlan}
+        onClose={() => setShowPricingModal(false)}
+        onSelectPlan={(plan) => {
+          setSelectedPlan(plan);
+          setShowPricingModal(false);
+        }}
+      />
     </div>
   );
 }

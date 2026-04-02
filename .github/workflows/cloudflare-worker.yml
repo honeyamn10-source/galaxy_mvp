@@ -1,0 +1,35 @@
+name: Cloudflare Worker Deploy
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - workers/**
+      - .github/workflows/cloudflare-worker.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  deploy-worker:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Verify deployment inputs
+        shell: bash
+        run: |
+          set -euo pipefail
+          [[ -n "${{ secrets.CLOUDFLARE_API_TOKEN }}" ]] || { echo "Missing CLOUDFLARE_API_TOKEN"; exit 1; }
+          [[ -n "${{ secrets.CLOUDFLARE_ACCOUNT_ID }}" ]] || { echo "Missing CLOUDFLARE_ACCOUNT_ID"; exit 1; }
+
+      - name: Deploy Worker
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          workingDirectory: workers
+          wranglerVersion: '3.78.12'
+          command: deploy
