@@ -1,4 +1,5 @@
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
+import IntegrationWizard from './IntegrationWizard';
 
 const PLANS = {
   starter: { label: 'Starter', colorClass: 'tag-starter' },
@@ -7,6 +8,7 @@ const PLANS = {
 };
 
 export default function ClientPanel({ user, plan = 'starter', metrics, onManagePlan }) {
+  const [showWizard, setShowWizard] = useState(false);
   const activePlan = PLANS[plan] || PLANS.starter;
   const usage = useMemo(() => {
     const eventCount = Number(metrics?.total || 0);
@@ -41,8 +43,14 @@ export default function ClientPanel({ user, plan = 'starter', metrics, onManageP
         </article>
       </div>
       <div className="panel-actions">
+        <button type="button" className="btn btn-primary" onClick={() => setShowWizard(true)}>Add Device</button>
         <button type="button" className="btn btn-secondary" onClick={onManagePlan}>Open Pricing</button>
       </div>
+      <IntegrationWizard
+        open={showWizard}
+        onClose={() => setShowWizard(false)}
+        user={user}
+      />
     </section>
   );
 }

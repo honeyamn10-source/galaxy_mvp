@@ -43,6 +43,24 @@ Endpoint:
 
 Use Authorization Bearer token from login/OTP verification.
 
+### Easy Attach Wizard
+
+For non-technical teams, use the dashboard's Add Device wizard instead of manual setup.
+
+How it works:
+1. Open the dashboard.
+2. Click Add Device in Client Control.
+3. Select the sector and connection type.
+4. Paste the RTSP URL for cameras or choose HTTP Sensor for existing systems.
+5. Generate the Docker or curl command.
+6. Copy the command to the target device or gateway and start sending events immediately.
+
+The wizard also creates a device API key automatically and can attempt to apply template alert rules when the notification endpoint is available.
+
+Dashboard links:
+- https://galaxy-mvp.pages.dev
+- https://galaxy-mvp.fly.dev
+
 ### Step 3: Configure Alert Rules and Delivery Channels
 
 Set event thresholds and destinations:
