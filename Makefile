@@ -1,4 +1,4 @@
-.PHONY: help setup up down logs test clean rebuild swarm-certs swarm-up swarm-down swarm-test chain-unit-test phase-v-test contracts-test ibc-up ollama-up ollama-down test-llm llm-up llm-down
+.PHONY: help setup up down logs test clean rebuild swarm-certs swarm-up swarm-down swarm-test chain-unit-test phase-v-test contracts-test ibc-up ollama-up ollama-down test-llm llm-up llm-down demo
 
 help:
 	@echo "🌌 Galaxy Event Detection System - Extended with LLM Support"
@@ -24,6 +24,7 @@ help:
 	@echo "  make llm-up      - Start LLM service (requires Ollama)"
 	@echo "  make llm-down    - Stop LLM service"
 	@echo "  make test-llm    - Test LLM integration (requires all services running)"
+	@echo "  make demo        - Run demo script"
 	@echo ""
 	@echo "Database:"
 	@echo "  make db          - Connect to PostgreSQL CLI"
@@ -159,3 +160,6 @@ test-llm:
 docs:
 	@echo "📚 Authority endpoints"
 	@echo "Visit: http://localhost:1317/cosmos/tx/v1beta1/txs"
+
+demo:
+	bash ./demo.sh

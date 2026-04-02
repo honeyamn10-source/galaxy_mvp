@@ -17,6 +17,7 @@ from typing import Optional
 
 import requests
 from fastapi import FastAPI, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 
 logging.basicConfig(level=os.getenv("LOG_LEVEL", "INFO"))
@@ -26,6 +27,14 @@ app = FastAPI(
     title="Galaxy LLM Service",
     version="1.0.0",
     description="Wraps Ollama API for event analysis and chat.",
+)
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=False,
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
 # Configuration

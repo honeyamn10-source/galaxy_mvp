@@ -1,242 +1,92 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Galaxy MVP Download</title>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Galaxy MVP | Live Demo</title>
+  <script src="https://cdn.tailwindcss.com"></script>
   <style>
-    :root {
-      --bg0: #fff7ed;
-      --bg1: #fffbeb;
-      --ink: #1f2937;
-      --muted: #4b5563;
-      --line: #f59e0b;
-      --cta: #ea580c;
-      --cta-ink: #fff7ed;
-      --card: #ffffff;
-    }
-
-    * { box-sizing: border-box; }
-
     body {
-      margin: 0;
-      font-family: "Sora", "Manrope", sans-serif;
-      color: var(--ink);
       background:
-        radial-gradient(circle at 80% 10%, rgba(234, 88, 12, 0.22), transparent 35%),
-        radial-gradient(circle at 15% 30%, rgba(245, 158, 11, 0.16), transparent 45%),
-        linear-gradient(170deg, var(--bg0) 0%, var(--bg1) 60%, #ffedd5 100%);
-      min-height: 100vh;
-    }
-
-    .wrap {
-      width: min(1040px, 92vw);
-      margin: 0 auto;
-      padding: 28px 0 56px;
-    }
-
-    .top {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      gap: 12px;
-      margin-bottom: 34px;
-    }
-
-    .brand {
-      font-weight: 800;
-      letter-spacing: 0.06em;
-      text-transform: uppercase;
-    }
-
-    .hero h1 {
-      margin: 0;
-      font-size: clamp(2rem, 5vw, 3.4rem);
-      line-height: 1.02;
-      max-width: 15ch;
-    }
-
-    .hero p {
-      max-width: 56ch;
-      color: var(--muted);
-      font-size: 1.05rem;
-      margin-top: 14px;
-    }
-
-    .actions {
-      display: flex;
-      gap: 10px;
-      flex-wrap: wrap;
-      margin-top: 18px;
-    }
-
-    .btn {
-      text-decoration: none;
-      padding: 12px 16px;
-      border-radius: 12px;
-      font-weight: 700;
-      border: 1px solid transparent;
-      transition: transform 120ms ease;
-    }
-
-    .btn:hover { transform: translateY(-1px); }
-
-    .btn-cta {
-      background: var(--cta);
-      color: var(--cta-ink);
-    }
-
-    .btn-ghost {
-      border-color: var(--line);
-      color: #9a3412;
-      background: rgba(255, 255, 255, 0.75);
-    }
-
-    .grid {
-      margin-top: 32px;
-      display: grid;
-      gap: 14px;
-      grid-template-columns: repeat(3, minmax(0, 1fr));
-    }
-
-    .card {
-      background: var(--card);
-      border: 1px solid #fed7aa;
-      border-radius: 16px;
-      padding: 16px;
-      box-shadow: 0 10px 28px rgba(124, 45, 18, 0.08);
-      opacity: 0;
-      transform: translateY(12px);
-      transition: opacity .45s ease, transform .45s ease;
-    }
-
-    .card.is-visible {
-      opacity: 1;
-      transform: translateY(0);
-    }
-
-    .card h3 {
-      margin: 0;
-      font-size: 1.02rem;
-    }
-
-    .card p {
-      margin: 8px 0 0;
-      color: var(--muted);
-      line-height: 1.45;
-    }
-
-    .footer {
-      margin-top: 30px;
-      color: #9a3412;
-      font-size: 0.92rem;
-    }
-
-    .demo {
-      margin-top: 20px;
-      background: #fff;
-      border: 1px solid #fdba74;
-      border-radius: 14px;
-      padding: 14px;
-      color: #7c2d12;
-    }
-
-    .ai-panel {
-      margin-top: 18px;
-      border: 1px solid #fdba74;
-      border-radius: 12px;
-      background: #fff;
-      padding: 12px;
-    }
-
-    .ai-panel textarea {
-      width: 100%;
-      border-radius: 8px;
-      border: 1px solid #fdba74;
-      padding: 8px;
-      font-family: inherit;
-      box-sizing: border-box;
-    }
-
-    .ai-actions {
-      margin-top: 8px;
-      margin-bottom: 8px;
-    }
-
-    .ai-panel pre {
-      background: #fff7ed;
-      border: 1px solid #fed7aa;
-      border-radius: 8px;
-      padding: 10px;
-      overflow: auto;
-      white-space: pre-wrap;
-    }
-
-    @media (max-width: 900px) {
-      .grid { grid-template-columns: 1fr; }
+        radial-gradient(circle at top right, rgba(56, 189, 248, 0.18), transparent 28%),
+        radial-gradient(circle at bottom left, rgba(168, 85, 247, 0.14), transparent 30%),
+        linear-gradient(180deg, #060816 0%, #0b1020 100%);
     }
   </style>
 </head>
-<body>
-  <div class="wrap">
-    <header class="top">
-      <div class="brand">Galaxy MVP</div>
-      <a class="btn btn-ghost" href="https://github.com/honeyamn10-source/galaxy_mvp" target="_blank" rel="noreferrer">Open Source Repo</a>
+<body class="text-slate-100">
+  <main class="mx-auto min-h-screen max-w-7xl px-6 py-8 md:px-10 lg:px-14">
+    <header class="flex flex-wrap items-center justify-between gap-4 rounded-3xl border border-white/10 bg-white/5 px-6 py-4 backdrop-blur-xl">
+      <div>
+        <div class="text-xs uppercase tracking-[0.3em] text-cyan-300">Galaxy MVP</div>
+        <div class="text-sm text-slate-400">Edge, swarm, authority, intelligence, and LLM demo stack</div>
+      </div>
+      <div class="flex flex-wrap gap-3">
+        <span id="status-badge" class="rounded-full bg-slate-700 px-3 py-1 text-sm font-semibold text-slate-100">Checking...</span>
+        <a class="rounded-full bg-cyan-400 px-4 py-2 font-semibold text-slate-950 transition hover:bg-cyan-300" href="http://localhost:8000">Open Dashboard</a>
+        <a class="rounded-full border border-white/15 px-4 py-2 font-semibold text-white transition hover:bg-white/10" href="../landing/dashboard-preview.svg">Preview</a>
+      </div>
     </header>
 
-    <section class="hero">
-      <h1>Deploy Galaxy MVP In Minutes</h1>
-      <p>
-        Galaxy MVP combines edge detection, P2P event relay, compliance processing,
-        predictive risk scoring, and LLM-assisted analysis.
-      </p>
-      <div class="actions">
-        <a class="btn btn-cta" href="../../install-galaxy.sh">Download Installer</a>
-        <a class="btn btn-ghost" href="../../deploy-demo.sh">Cloud Deploy Script</a>
-        <a class="btn btn-ghost" href="../../galaxy-desktop/README.md">Desktop App (Tauri)</a>
-        <a class="btn btn-ghost" href="../../QUICKSTART.md">Quickstart</a>
-        <a class="btn btn-ghost" href="../../.env.example">Custom Model Env Example</a>
+    <section class="mt-8 grid gap-6 lg:grid-cols-[1.3fr_0.7fr] lg:items-stretch">
+      <div class="rounded-[2rem] border border-white/10 bg-white/5 p-8 shadow-2xl shadow-black/30 backdrop-blur-xl">
+        <p class="text-xs uppercase tracking-[0.25em] text-cyan-300">Portfolio-ready demo</p>
+        <h1 class="mt-4 max-w-3xl text-4xl font-black leading-none md:text-6xl">A polished, live, demo-ready distributed AI event system.</h1>
+        <p class="mt-5 max-w-2xl text-lg text-slate-300">Galaxy MVP brings together edge event simulation, P2P swarm transport, an authority event store, predictive intelligence, and an LLM assistant in a single local demo stack.</p>
+
+        <div class="mt-8 flex flex-wrap gap-3">
+          <a href="http://localhost:8000" class="rounded-full bg-white px-5 py-3 font-semibold text-slate-950 transition hover:bg-slate-200">Launch Dashboard</a>
+          <a href="../../scripts/demo.sh" class="rounded-full border border-white/15 px-5 py-3 font-semibold text-white transition hover:bg-white/10">Demo Script</a>
+          <a href="../../README.md" class="rounded-full border border-white/15 px-5 py-3 font-semibold text-white transition hover:bg-white/10">Readme</a>
+        </div>
+
+        <div class="mt-8 grid gap-4 sm:grid-cols-3">
+          <div class="rounded-2xl bg-white/5 p-4"><div class="text-3xl font-black text-cyan-300">01</div><div class="mt-1 text-sm text-slate-300">Edge generates detections</div></div>
+          <div class="rounded-2xl bg-white/5 p-4"><div class="text-3xl font-black text-violet-300">02</div><div class="mt-1 text-sm text-slate-300">Swarm forwards over HTTP</div></div>
+          <div class="rounded-2xl bg-white/5 p-4"><div class="text-3xl font-black text-emerald-300">03</div><div class="mt-1 text-sm text-slate-300">Authority and dashboard update live</div></div>
+        </div>
       </div>
 
-      <div class="demo">
-        <strong>Live Demo URL:</strong> https://demo.example.com (replace with your deployment URL)
-      </div>
-
-      <div class="actions" style="margin-top:10px;">
-        <button class="btn btn-ghost" id="open-ai-assistant" type="button">Open AI Assistant</button>
-      </div>
-      <div id="ai-assistant-mount"></div>
+      <aside class="rounded-[2rem] border border-white/10 bg-slate-950/70 p-5 shadow-xl shadow-black/30">
+        <img src="dashboard-preview.svg" alt="Galaxy dashboard preview" class="w-full rounded-2xl border border-white/10" />
+        <div class="mt-4 grid gap-3 sm:grid-cols-3">
+          <div class="rounded-2xl bg-white/5 p-3 text-center text-sm text-slate-300">Live events</div>
+          <div class="rounded-2xl bg-white/5 p-3 text-center text-sm text-slate-300">3D galaxy</div>
+          <div class="rounded-2xl bg-white/5 p-3 text-center text-sm text-slate-300">LLM copilot</div>
+        </div>
+      </aside>
     </section>
 
-    <section class="grid">
-      <article class="card">
-        <h3>Detect Wildfires In Seconds</h3>
-        <p>Edge nodes ingest detections over mTLS and instantly route them into the swarm + authority chain pipeline.</p>
+    <section class="mt-8 grid gap-4 md:grid-cols-3">
+      <article class="rounded-3xl border border-white/10 bg-white/5 p-6 backdrop-blur-xl">
+        <h2 class="text-xl font-bold">System Status</h2>
+        <p class="mt-2 text-slate-300">Checks the authority health endpoint and refreshes every 10 seconds.</p>
       </article>
-      <article class="card">
-        <h3>Compliance By Default</h3>
-        <p>Policy transforms apply region-aware masking and encryption with auditable event trails.</p>
+      <article class="rounded-3xl border border-white/10 bg-white/5 p-6 backdrop-blur-xl">
+        <h2 class="text-xl font-bold">Manual Event Testing</h2>
+        <p class="mt-2 text-slate-300">The dashboard includes a one-click event submit form for live demos.</p>
       </article>
-      <article class="card">
-        <h3>Predictive Early Warnings</h3>
-        <p>The predictive service publishes risk alerts from live event history and weather context.</p>
-      </article>
-      <article class="card">
-        <h3>LLM Incident Copilot</h3>
-        <p>Operators ask natural-language questions and receive contextual responses from system state.</p>
-      </article>
-      <article class="card">
-        <h3>One-Click Installer</h3>
-        <p>Interactive installer detects OS, checks ports, pulls GHCR images, writes .env, and opens the dashboard.</p>
-      </article>
-      <article class="card">
-        <h3>Cloud Demo Deployment</h3>
-        <p>Ubuntu deployment script configures Docker + nginx basic auth and exposes a protected public demo endpoint.</p>
+      <article class="rounded-3xl border border-white/10 bg-white/5 p-6 backdrop-blur-xl">
+        <h2 class="text-xl font-bold">Portfolio Use</h2>
+        <p class="mt-2 text-slate-300">This page is ready to link from a resume or portfolio as a project highlight.</p>
       </article>
     </section>
 
-    <p class="footer">Use case ideas: wildfire detection, smart perimeter monitoring, industrial anomaly response.</p>
-  </div>
+    <section class="mt-8 rounded-[2rem] border border-white/10 bg-white/5 p-6 backdrop-blur-xl">
+      <div class="flex flex-wrap items-center justify-between gap-3">
+        <h2 class="text-2xl font-bold">Live demo notes</h2>
+        <span class="rounded-full border border-emerald-400/30 bg-emerald-400/10 px-3 py-1 text-sm text-emerald-200">Auto events supported</span>
+      </div>
+      <div class="mt-4 grid gap-4 lg:grid-cols-[1fr_1fr]">
+        <div class="rounded-2xl bg-black/20 p-4 text-sm text-slate-300">
+          Use <span class="font-semibold text-white">scripts/demo.sh</span> to start the stack, open the dashboard, and launch auto events.
+        </div>
+        <div class="rounded-2xl bg-black/20 p-4 text-sm text-slate-300">
+          Landing page endpoint: <span class="font-semibold text-white">http://localhost:8080</span>
+        </div>
+      </div>
+    </section>
+  </main>
   <script type="module" src="./app.js"></script>
 </body>
 </html>

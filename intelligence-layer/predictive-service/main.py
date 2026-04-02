@@ -9,6 +9,7 @@ from typing import Any
 import numpy as np
 import requests
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from xgboost import XGBClassifier
 from prometheus_client import Counter, Gauge, generate_latest
@@ -20,6 +21,14 @@ app = FastAPI(
     title="Galaxy Predictive Analytics",
     version="0.4.0",
     description="Phase IV predictive analytics service that produces risk alerts and publishes them into the swarm.",
+)
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=False,
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
 AUTHORITY_URL = os.getenv("PRED_AUTHORITY_URL", "http://authority-chain:1317")

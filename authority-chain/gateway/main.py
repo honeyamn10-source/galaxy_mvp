@@ -12,6 +12,7 @@ from typing import Deque, Dict, List, Optional, Tuple
 import grpc
 import requests
 from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
+from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 
 logging.basicConfig(level=os.getenv("LOG_LEVEL", "INFO"))
@@ -21,6 +22,14 @@ app = FastAPI(
     title="Constellation Authority Gateway",
     version="0.4.0",
     description="Phase III local authority gateway exposing Cosmos-like REST and gRPC submission surfaces.",
+)
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=False,
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
 DATA_DIR = Path(os.getenv("AUTHORITY_DATA_DIR", "/data"))
@@ -411,6 +420,16 @@ def health() -> Dict:
         "grpc_addr": GRPC_ADDR,
         "llm_service_url": LLM_SERVICE_URL or "disabled",
         "llm_available": llm_available,
+    }
+
+
+@app.get("/system/health")
+def system_health() -> Dict:
+    return {
+        "authority": "ok",
+        "edge": "unknown",
+        "swarm": "unknown",
+        "events": len(store),
     }
 
 

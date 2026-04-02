@@ -24,15 +24,15 @@ import (
 	"time"
 
 	libp2p "github.com/libp2p/go-libp2p"
+	dht "github.com/libp2p/go-libp2p-kad-dht"
+	pubsub "github.com/libp2p/go-libp2p-pubsub"
 	"github.com/libp2p/go-libp2p/core/crypto"
 	"github.com/libp2p/go-libp2p/core/host"
 	"github.com/libp2p/go-libp2p/core/peer"
-	libp2ptls "github.com/libp2p/go-libp2p/p2p/security/tls"
-	"github.com/libp2p/go-libp2p/p2p/security/noise"
-	dht "github.com/libp2p/go-libp2p-kad-dht"
-	pubsub "github.com/libp2p/go-libp2p-pubsub"
 	"github.com/libp2p/go-libp2p/p2p/discovery/routing"
 	"github.com/libp2p/go-libp2p/p2p/discovery/util"
+	"github.com/libp2p/go-libp2p/p2p/security/noise"
+	libp2ptls "github.com/libp2p/go-libp2p/p2p/security/tls"
 	ma "github.com/multiformats/go-multiaddr"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
@@ -182,7 +182,7 @@ func loadConfig() (Config, error) {
 		ForwardMode:        envOrDefault("SWARM_FORWARD_MODE", "backend-http"),
 		CreatorAddress:     envOrDefault("SWARM_CREATOR_ADDRESS", "galaxy1swarmsubmitter"),
 		BackendURL:         envOrDefault("BACKEND_EVENTS_URL", "http://authority:8000/events"),
-		ValidatorSubmitURL: envOrDefault("VALIDATOR_SUBMIT_URL", "http://galaxyd:1317/galaxy/v1/events"),
+		ValidatorSubmitURL: envOrDefault("VALIDATOR_HTTP_URL", envOrDefault("VALIDATOR_SUBMIT_URL", "http://galaxyd:1317/galaxy/v1/events")),
 		ValidatorGRPCAddr:  envOrDefault("VALIDATOR_GRPC_ADDR", "galaxyd:9090"),
 		ServerCertPath:     envOrDefault("SWARM_TLS_CERT", "/certs/swarm-node.crt"),
 		ServerKeyPath:      envOrDefault("SWARM_TLS_KEY", "/certs/swarm-node.key"),
@@ -196,7 +196,7 @@ func loadConfig() (Config, error) {
 	if cfg.ForwardMode == "backend-http" && cfg.BackendURL == "" {
 		return Config{}, errors.New("BACKEND_EVENTS_URL is required for backend-http mode")
 	}
-	if cfg.ForwardMode == "validator-rest" && cfg.ValidatorSubmitURL == "" {
+	if (cfg.ForwardMode == "validator-rest" || cfg.ForwardMode == "validator-http" || cfg.ForwardMode == "http") && cfg.ValidatorSubmitURL == "" {
 		return Config{}, errors.New("VALIDATOR_SUBMIT_URL is required for validator-rest mode")
 	}
 	if cfg.ForwardMode == "validator-grpc" && cfg.ValidatorGRPCAddr == "" {
@@ -684,7 +684,7 @@ func (a *App) forwardToAuthority(ctx context.Context, env SwarmEnvelope) error {
 	switch a.cfg.ForwardMode {
 	case "backend-http":
 		return a.forwardToBackend(ctx, env)
-	case "validator-rest":
+	case "http", "validator-http", "validator-rest":
 		return a.forwardToValidatorREST(ctx, env)
 	case "validator-grpc":
 		return a.forwardToValidatorGRPC(ctx, env)

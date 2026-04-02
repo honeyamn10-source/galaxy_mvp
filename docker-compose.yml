@@ -81,8 +81,8 @@ services:
       SWARM_HEALTH_ADDR: ":8081"
       SWARM_RENDEZVOUS: galaxy-v2
       SWARM_BOOTSTRAP_SEEDS: ""
-      SWARM_FORWARD_MODE: validator-grpc
-      VALIDATOR_GRPC_ADDR: authority-chain:9090
+      SWARM_FORWARD_MODE: http
+      VALIDATOR_HTTP_URL: http://authority-chain:1317/galaxy/v1/events
       SWARM_CREATOR_ADDRESS: galaxy1swarmsubmitter
       SWARM_TLS_CERT: /certs/swarm-node.crt
       SWARM_TLS_KEY: /certs/swarm-node.key
@@ -113,8 +113,8 @@ services:
       SWARM_HEALTH_ADDR: ":8081"
       SWARM_RENDEZVOUS: galaxy-v2
       SWARM_BOOTSTRAP_SEEDS: swarm-node-1@swarm-node-1:7001
-      SWARM_FORWARD_MODE: validator-grpc
-      VALIDATOR_GRPC_ADDR: authority-chain:9090
+      SWARM_FORWARD_MODE: http
+      VALIDATOR_HTTP_URL: http://authority-chain:1317/galaxy/v1/events
       SWARM_CREATOR_ADDRESS: galaxy1swarmsubmitter
       SWARM_TLS_CERT: /certs/swarm-node.crt
       SWARM_TLS_KEY: /certs/swarm-node.key
@@ -289,6 +289,34 @@ services:
       retries: 5
     # Note: The LLM service doesn't depend on other services; it can start independently
     # Comment out this section if running Ollama on the host via Docker Desktop
+
+  frontend:
+    build:
+      context: ./frontend
+      args:
+        REACT_APP_API_URL: http://localhost:1317
+        REACT_APP_WS_URL: ws://localhost:1317/websocket
+        REACT_APP_PREDICTIVE_URL: http://localhost:8300
+        REACT_APP_LLM_URL: http://localhost:8600
+    container_name: galaxy-frontend
+    ports:
+      - "8000:80"
+    depends_on:
+      authority-chain:
+        condition: service_healthy
+      predictive-service:
+        condition: service_healthy
+      llm-service:
+        condition: service_started
+
+  landing:
+    image: nginx:alpine
+    container_name: galaxy-landing
+    volumes:
+      - ./docs/landing:/usr/share/nginx/html:ro,z
+    ports:
+      - "8080:80"
+    restart: unless-stopped
 
   hermes-relayer:
     image: informalsystems/hermes:v1.8.2

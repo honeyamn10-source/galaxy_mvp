@@ -1,33 +1,24 @@
-const aiMount = document.getElementById("ai-assistant-mount");
-const aiButton = document.getElementById("open-ai-assistant");
+const badge = document.getElementById('status-badge');
 
-if (aiButton && aiMount) {
-  aiButton.addEventListener("click", async () => {
-    aiButton.disabled = true;
-    aiButton.textContent = "Loading AI Assistant...";
+async function checkStatus() {
+  if (!badge) {
+    return;
+  }
 
-    try {
-      const mod = await import("./ai-panel.js");
-      mod.mountAIAssistant(aiMount);
-      aiButton.remove();
-    } catch (err) {
-      aiButton.disabled = false;
-      aiButton.textContent = "Open AI Assistant";
-      aiMount.textContent = `Failed to load assistant: ${String(err)}`;
+  try {
+    const response = await fetch('http://localhost:1317/health', { cache: 'no-store' });
+    if (response.ok) {
+      badge.textContent = 'System Online';
+      badge.className = 'rounded-full bg-emerald-500 px-3 py-1 text-sm font-semibold text-white';
+      return;
     }
-  });
+  } catch (error) {
+    // fall through to offline state
+  }
+
+  badge.textContent = 'System Offline';
+  badge.className = 'rounded-full bg-rose-500 px-3 py-1 text-sm font-semibold text-white';
 }
 
-const observer = new IntersectionObserver(
-  (entries) => {
-    for (const e of entries) {
-      if (e.isIntersecting) {
-        e.target.classList.add("is-visible");
-        observer.unobserve(e.target);
-      }
-    }
-  },
-  { threshold: 0.12 }
-);
-
-document.querySelectorAll(".card").forEach((el) => observer.observe(el));
+checkStatus();
+setInterval(checkStatus, 10000);
