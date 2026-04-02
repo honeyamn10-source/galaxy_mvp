@@ -8,11 +8,13 @@ from typing import Any
 
 import numpy as np
 import requests
-from fastapi import FastAPI
+from fastapi import Depends, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from xgboost import XGBClassifier
 from prometheus_client import Counter, Gauge, generate_latest
+
+from shared.auth_middleware import require_request_context
 
 logging.basicConfig(level=os.getenv("LOG_LEVEL", "INFO"))
 logger = logging.getLogger("predictive-service")
@@ -43,6 +45,7 @@ TRAIN_WINDOW = int(os.getenv("PRED_TRAIN_WINDOW", "200"))
 RISK_THRESHOLD = float(os.getenv("PRED_RISK_THRESHOLD", "0.65"))
 WEATHER_API_KEY = os.getenv("OPENWEATHER_API_KEY", "")
 WEATHER_BASE_URL = os.getenv("OPENWEATHER_BASE_URL", "https://api.openweathermap.org/data/2.5/weather")
+INTERNAL_API_KEY = os.getenv("INTERNAL_API_KEY", "")
 
 _loop_stop = threading.Event()
 _loop_thread: threading.Thread | None = None
@@ -105,6 +108,7 @@ def _fetch_events() -> list[dict[str, Any]]:
         resp = requests.get(
             f"{AUTHORITY_URL}/galaxy/v1/events",
             params={"limit": TRAIN_WINDOW},
+            headers={"X-Internal-Auth": INTERNAL_API_KEY} if INTERNAL_API_KEY else None,
             timeout=REQUEST_TIMEOUT,
         )
         if resp.status_code == 200:
@@ -251,7 +255,7 @@ def health() -> PredictionStatus:
 
 
 @app.get("/predictions/latest")
-def predictions_latest() -> dict[str, Any]:
+def predictions_latest(_: dict = Depends(require_request_context)) -> dict[str, Any]:
     return {
         "items": latest_predictions,
         "count": len(latest_predictions),
@@ -260,7 +264,7 @@ def predictions_latest() -> dict[str, Any]:
 
 
 @app.post("/predictions/run-once")
-def run_once() -> dict[str, Any]:
+def run_once(_: dict = Depends(require_request_context)) -> dict[str, Any]:
     events = _fetch_events()
     x, y = _fit_model(events)
 

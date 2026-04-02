@@ -31,6 +31,31 @@ services:
       timeout: 5s
       retries: 5
 
+  auth-service:
+    build: ./auth-service
+    container_name: galaxy-auth-service
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@postgres:5432/${POSTGRES_DB:-galaxy}
+      JWT_SECRET: ${JWT_SECRET:-change-me-generate-with-openssl-rand-hex-32}
+      INTERNAL_API_KEY: ${INTERNAL_API_KEY:-change-me-internal-service-key}
+      DEFAULT_ADMIN_EMAIL: ${DEFAULT_ADMIN_EMAIL:-admin@test.com}
+      DEFAULT_ADMIN_PASSWORD: ${DEFAULT_ADMIN_PASSWORD:-Test1234!}
+      DEFAULT_ADMIN_ORG_NAME: ${DEFAULT_ADMIN_ORG_NAME:-Test Corp}
+      DEFAULT_EDGE_API_KEY: ${DEFAULT_EDGE_API_KEY:-edge-planet-local}
+      DEFAULT_EDGE_ORG_NAME: ${DEFAULT_EDGE_ORG_NAME:-Edge Demo}
+    ports:
+      - "8700:8700"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    volumes:
+      - ./shared:/app/shared:ro,z
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8700/health', timeout=3)"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
   # Authority chain node (galaxyd)
   authority-chain:
     build: ./authority-chain
@@ -55,14 +80,20 @@ services:
       CHAIN_COMPLIANCE_TIMEOUT: 4s
       LLM_SERVICE_URL: http://llm-service:8600
       LLM_TIMEOUT: "30"
+      AUTH_SERVICE_URL: http://auth-service:8700
+      JWT_SECRET: ${JWT_SECRET:-change-me-generate-with-openssl-rand-hex-32}
+      INTERNAL_API_KEY: ${INTERNAL_API_KEY:-change-me-internal-service-key}
     volumes:
       - authority_data:/data
+      - ./shared:/app/shared:ro,z
     depends_on:
       postgres:
         condition: service_healthy
       redis:
         condition: service_healthy
       compliance-engine:
+        condition: service_healthy
+      auth-service:
         condition: service_healthy
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:1317/health"]
@@ -87,6 +118,7 @@ services:
       SWARM_TLS_CERT: /certs/swarm-node.crt
       SWARM_TLS_KEY: /certs/swarm-node.key
       SWARM_CLIENT_CA: /certs/ca.crt
+      INTERNAL_API_KEY: ${INTERNAL_API_KEY:-change-me-internal-service-key}
     ports:
       - "7001:7001"
       - "8443:8443"
@@ -119,6 +151,7 @@ services:
       SWARM_TLS_CERT: /certs/swarm-node.crt
       SWARM_TLS_KEY: /certs/swarm-node.key
       SWARM_CLIENT_CA: /certs/ca.crt
+      INTERNAL_API_KEY: ${INTERNAL_API_KEY:-change-me-internal-service-key}
     ports:
       - "7002:7001"
       - "8444:8443"
@@ -202,8 +235,10 @@ services:
       PRED_LOOP_INTERVAL_SECONDS: 45
       PRED_TRAIN_WINDOW: 200
       PRED_RISK_THRESHOLD: 0.65
+      INTERNAL_API_KEY: ${INTERNAL_API_KEY:-change-me-internal-service-key}
     volumes:
       - ./infra/certs/dev:/certs:ro,z
+      - ./shared:/app/shared:ro,z
     ports:
       - "8300:8300"
     depends_on:
@@ -249,6 +284,7 @@ services:
       WEBHOOK_POLL_INTERVAL_SECONDS: 5
       WEBHOOK_MAX_RETRIES: 4
       WEBHOOK_BACKOFF_BASE_SECONDS: 0.5
+      INTERNAL_API_KEY: ${INTERNAL_API_KEY:-change-me-internal-service-key}
     ports:
       - "8500:8500"
     depends_on:
@@ -280,8 +316,11 @@ services:
       LLM_PORT: "8600"
       LLM_HOST: "0.0.0.0"
       LOG_LEVEL: "INFO"
+      INTERNAL_API_KEY: ${INTERNAL_API_KEY:-change-me-internal-service-key}
     ports:
       - "8600:8600"
+    volumes:
+      - ./shared:/app/shared:ro,z
     healthcheck:
       test: ["CMD", "python", "-c", "import requests; requests.get('http://localhost:8600/health', timeout=3)"]
       interval: 30s
@@ -294,6 +333,7 @@ services:
     build:
       context: ./frontend
       args:
+        REACT_APP_AUTH_URL: http://localhost
         REACT_APP_API_URL: http://localhost:1317
         REACT_APP_WS_URL: ws://localhost:1317/websocket
         REACT_APP_PREDICTIVE_URL: http://localhost:8300
@@ -308,6 +348,27 @@ services:
         condition: service_healthy
       llm-service:
         condition: service_started
+      auth-service:
+        condition: service_healthy
+
+  nginx-gateway:
+    image: nginx:alpine
+    container_name: galaxy-nginx-gateway
+    ports:
+      - "80:80"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro,z
+    depends_on:
+      auth-service:
+        condition: service_healthy
+      authority-chain:
+        condition: service_healthy
+      frontend:
+        condition: service_started
+      edge-planet:
+        condition: service_healthy
+    networks:
+      default:
 
   landing:
     image: nginx:alpine
