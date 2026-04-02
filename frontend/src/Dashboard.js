@@ -8,6 +8,7 @@ import AlertSettings from './components/AlertSettings';
 import ReportDownload from './components/ReportDownload';
 import PricingModal from './components/PricingModal';
 import './Dashboard.css';
+import './dashboard-modern.css';
 
 const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:1317';
 const WS_URL = process.env.REACT_APP_WS_URL || 'ws://localhost:1317/websocket';
