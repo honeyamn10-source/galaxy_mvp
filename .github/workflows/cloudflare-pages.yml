@@ -1,0 +1,56 @@
+name: Cloudflare Pages Deploy
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - docs/landing/**
+      - .github/workflows/cloudflare-pages.yml
+  pull_request:
+    paths:
+      - docs/landing/**
+      - .github/workflows/cloudflare-pages.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  deploy-pages:
+    runs-on: ubuntu-latest
+    env:
+      PROJECT_DIR: docs/landing
+      OUTPUT_DIR: docs/landing
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Verify deployment inputs
+        shell: bash
+        run: |
+          set -euo pipefail
+          [[ -n "${{ secrets.CLOUDFLARE_API_TOKEN }}" ]] || { echo "Missing CLOUDFLARE_API_TOKEN"; exit 1; }
+          [[ -n "${{ secrets.CLOUDFLARE_ACCOUNT_ID }}" ]] || { echo "Missing CLOUDFLARE_ACCOUNT_ID"; exit 1; }
+          [[ -n "${{ secrets.CF_PAGES_PROJECT_NAME }}" ]] || { echo "Missing CF_PAGES_PROJECT_NAME"; exit 1; }
+          [[ -d "$PROJECT_DIR" ]] || { echo "Project dir not found: $PROJECT_DIR"; exit 1; }
+
+      - name: Deploy to Cloudflare Pages
+        id: cf-pages
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          command: >
+            pages deploy ${{ env.OUTPUT_DIR }}
+            --project-name=${{ secrets.CF_PAGES_PROJECT_NAME }}
+            ${{ github.event_name == 'pull_request' && format('--branch=pr-{0}', github.event.pull_request.number) || '--branch=main' }}
+
+      - name: Publish deployment summary
+        shell: bash
+        run: |
+          {
+            echo "## Cloudflare Pages Deployment"
+            echo "- Project: ${{ secrets.CF_PAGES_PROJECT_NAME }}"
+            echo "- Branch: ${{ github.ref_name }}"
+            echo "- Commit: ${{ github.sha }}"
+          } >> "$GITHUB_STEP_SUMMARY"
