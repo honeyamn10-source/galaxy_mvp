@@ -12,6 +12,7 @@ from typing import Any, Optional
 import numpy as np
 import requests
 from fastapi import FastAPI, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 from prometheus_client import Counter, Gauge, generate_latest, CONTENT_TYPE_LATEST
 
@@ -22,6 +23,14 @@ app = FastAPI(
     title="Edge Planet Simulator",
     version="2.0.0",
     description="Phase II edge simulator that sends detections into the P2P swarm ingress.",
+)
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=False,
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
 

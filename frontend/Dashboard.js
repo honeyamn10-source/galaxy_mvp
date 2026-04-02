@@ -1,6 +1,12 @@
 import React, { useEffect, useState } from 'react';
 import './Dashboard.css';
 
+const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:1317';
+const BACKEND_BASE_URL = process.env.REACT_APP_BACKEND_URL || 'http://localhost:8000';
+const COSMOS_WS_URL = process.env.REACT_APP_WS_URL || 'ws://localhost:26657/websocket';
+const PREDICTIVE_BASE_URL = process.env.REACT_APP_PREDICTIVE_URL || 'http://localhost:8300';
+const LLM_BASE_URL = process.env.REACT_APP_LLM_URL || 'http://localhost:8600';
+
 export default function Dashboard() {
   const [events, setEvents] = useState([]);
   const [predictions, setPredictions] = useState([]);
@@ -60,8 +66,8 @@ export default function Dashboard() {
       const cosmosAction = encodeURIComponent("message.action='submit_event'");
       const cosmosModule = encodeURIComponent("message.module='galaxy'");
       const request = dataSource === 'cosmos'
-        ? fetch(`http://localhost:1317/cosmos/tx/v1beta1/txs?limit=50&events=${cosmosAction}&events=${cosmosModule}`)
-        : fetch('http://localhost:8000/events?page=1&page_size=50', {
+        ? fetch(`${API_BASE_URL}/cosmos/tx/v1beta1/txs?limit=50&events=${cosmosAction}&events=${cosmosModule}`)
+        : fetch(`${BACKEND_BASE_URL}/events?page=1&page_size=50`, {
             headers: {
               'X-API-Key': apiKey
             }
@@ -95,7 +101,7 @@ export default function Dashboard() {
 
   const fetchPredictions = async () => {
     try {
-      const response = await fetch('http://localhost:8300/predictions/latest');
+      const response = await fetch(`${PREDICTIVE_BASE_URL}/predictions/latest`);
       if (!response.ok) {
         return;
       }
@@ -119,7 +125,7 @@ export default function Dashboard() {
       return;
     }
     try {
-      const response = await fetch(`http://localhost:1317/economy/v1/balance/by-device/${encodeURIComponent(deviceForBalance)}`);
+      const response = await fetch(`${API_BASE_URL}/economy/v1/balance/by-device/${encodeURIComponent(deviceForBalance)}`);
       if (!response.ok) {
         return;
       }
@@ -140,7 +146,7 @@ export default function Dashboard() {
     }
 
     try {
-      const response = await fetch('http://localhost:1317/economy/v1/stake', {
+      const response = await fetch(`${API_BASE_URL}/economy/v1/stake`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ wallet: tokenInfo.wallet, amount: 10 })
@@ -162,7 +168,7 @@ export default function Dashboard() {
     setChatLoading(true);
 
     try {
-      const response = await fetch('http://localhost:8600/chat', {
+      const response = await fetch(`${LLM_BASE_URL}/chat`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ question: userMessage })
@@ -208,8 +214,8 @@ export default function Dashboard() {
 
     try {
       const wsUrl = dataSource === 'cosmos'
-        ? 'ws://localhost:26657/websocket'
-        : `ws://localhost:8000/ws?api_key=${encodeURIComponent(apiKey)}`;
+        ? COSMOS_WS_URL
+        : `${(process.env.REACT_APP_BACKEND_WS_URL || BACKEND_BASE_URL.replace(/^http/i, 'ws')).replace(/\/$/, '')}/ws?api_key=${encodeURIComponent(apiKey)}`;
 
       const ws = new WebSocket(wsUrl);
 

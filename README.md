@@ -170,6 +170,27 @@ curl -s http://localhost:8500/health
 make test
 ```
 
+### 5) Run the Demo Stack
+
+```bash
+./demo.sh
+```
+
+This starts the stack, opens the dashboard, and keeps a background event stream running so the UI stays alive during demos.
+
+Demo URLs:
+
+- Dashboard: http://localhost:8000
+- Landing page: http://localhost:8080
+- Authority health: http://localhost:1317/health
+- Authority events: http://localhost:1317/galaxy/v1/events
+
+If you only need to verify health and restart unhealthy services, run:
+
+```bash
+./preflight.sh
+```
+
 ### 5) Optional LLM Enablement
 
 Start Ollama and model:

@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Honey | Galaxy MVP Portfolio</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    body {
+      background:
+        radial-gradient(circle at top left, rgba(56, 189, 248, 0.18), transparent 30%),
+        radial-gradient(circle at bottom right, rgba(168, 85, 247, 0.18), transparent 34%),
+        linear-gradient(180deg, #060816 0%, #0c1226 100%);
+    }
+  </style>
+</head>
+<body class="text-slate-100">
+  <main class="min-h-screen px-6 py-10 md:px-12 lg:px-20">
+    <section class="mx-auto max-w-6xl rounded-[2rem] border border-white/10 bg-white/5 p-8 shadow-2xl shadow-black/30 backdrop-blur-xl">
+      <p class="text-xs uppercase tracking-[0.3em] text-cyan-300">Portfolio</p>
+      <div class="mt-6 grid gap-10 lg:grid-cols-[1.25fr_0.75fr] lg:items-center">
+        <div>
+          <h1 class="max-w-3xl text-5xl font-black leading-none md:text-7xl">Galaxy MVP. Real-time AI for edge, swarm, and authority workflows.</h1>
+          <p class="mt-6 max-w-2xl text-lg text-slate-300">A portfolio-ready showcase of distributed event detection, demo infrastructure, and an operator-friendly dashboard with live telemetry.</p>
+          <div class="mt-8 flex flex-wrap gap-3">
+            <a class="rounded-full bg-cyan-400 px-5 py-3 font-semibold text-slate-950 transition hover:bg-cyan-300" href="http://localhost:8000">Open Dashboard</a>
+            <a class="rounded-full border border-white/15 px-5 py-3 font-semibold text-white transition hover:bg-white/10" href="../docs/landing/index.html">Landing Page</a>
+            <a class="rounded-full border border-white/15 px-5 py-3 font-semibold text-white transition hover:bg-white/10" href="../README.md">Readme</a>
+          </div>
+        </div>
+        <div class="rounded-[1.75rem] border border-white/10 bg-slate-950/60 p-5 shadow-xl">
+          <div class="mb-4 flex items-center justify-between">
+            <span class="rounded-full bg-emerald-400/15 px-3 py-1 text-xs font-semibold uppercase tracking-[0.2em] text-emerald-300">Demo Ready</span>
+            <span class="text-sm text-slate-400">2026</span>
+          </div>
+          <img src="../docs/landing/dashboard-preview.svg" alt="Galaxy dashboard preview" class="w-full rounded-2xl border border-white/10" />
+          <div class="mt-4 grid grid-cols-3 gap-3 text-center text-sm text-slate-300">
+            <div class="rounded-2xl bg-white/5 p-3">Edge</div>
+            <div class="rounded-2xl bg-white/5 p-3">Swarm</div>
+            <div class="rounded-2xl bg-white/5 p-3">Authority</div>
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+</body>
+</html>
