@@ -56,6 +56,7 @@ export default function Dashboard({ user, onLogout }) {
   const [chatMessages, setChatMessages] = useState([]);
   const [chatInput, setChatInput] = useState('');
   const [chatLoading, setChatLoading] = useState(false);
+  const [isGalaxyFullscreen, setIsGalaxyFullscreen] = useState(false);
   const [selectedPlan, setSelectedPlan] = useState('starter');
   const [showPricingModal, setShowPricingModal] = useState(false);
   const wsRef = useRef(null);
@@ -290,12 +291,15 @@ export default function Dashboard({ user, onLogout }) {
       />
 
       <section className="grid-layout">
-        <div className="panel galaxy-panel">
+        <div className={`panel galaxy-panel ${isGalaxyFullscreen ? 'fullscreen' : ''}`}>
           <div className="panel-header">
             <h2>3D Galaxy View</h2>
-            <p>Recent events are rendered as colored spheres in space.</p>
+            <p>Recent events are rendered as fast-moving spheres with orbit trails and a glowing core.</p>
+            <button className="btn btn-secondary" type="button" onClick={() => setIsGalaxyFullscreen((current) => !current)}>
+              {isGalaxyFullscreen ? 'Exit Fullscreen' : 'Fullscreen 3D'}
+            </button>
           </div>
-          <GalaxyView events={events.slice(0, 24)} />
+          <GalaxyView events={events.slice(0, 80)} fullscreen={isGalaxyFullscreen} />
         </div>
 
         <div className="panel">

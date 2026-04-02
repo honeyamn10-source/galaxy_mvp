@@ -43,6 +43,12 @@ services:
       DEFAULT_ADMIN_ORG_NAME: ${DEFAULT_ADMIN_ORG_NAME:-Test Corp}
       DEFAULT_EDGE_API_KEY: ${DEFAULT_EDGE_API_KEY:-edge-planet-local}
       DEFAULT_EDGE_ORG_NAME: ${DEFAULT_EDGE_ORG_NAME:-Edge Demo}
+      SMTP_HOST: ${SMTP_HOST:-}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_USER: ${SMTP_USER:-}
+      SMTP_PASSWORD: ${SMTP_PASSWORD:-}
+      SMTP_FROM: ${SMTP_FROM:-}
+      OTP_TTL_MINUTES: ${OTP_TTL_MINUTES:-10}
     ports:
       - "8700:8700"
     depends_on:
@@ -175,6 +181,9 @@ services:
       EDGE_TENANT_API_KEY: ${EDGE_TENANT_API_KEY:-edge-planet-local}
       EDGE_DEVICE_ID: ""
       RTSP_URL: ${RTSP_URL:-}
+      REAL_INFERENCE_URL: ${REAL_INFERENCE_URL:-}
+      CAMERA_POLL_INTERVAL_SECONDS: ${CAMERA_POLL_INTERVAL_SECONDS:-1.5}
+      CAMERA_MIN_CONFIDENCE: ${CAMERA_MIN_CONFIDENCE:-0.75}
       MODEL_PATH: ${MODEL_PATH:-/models/default-model.json}
       EDGE_CA_CERT: /certs/ca.crt
       EDGE_CLIENT_CERT: /certs/edge-planet.crt

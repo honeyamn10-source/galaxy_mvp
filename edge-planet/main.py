@@ -16,6 +16,11 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 from prometheus_client import Counter, Gauge, generate_latest, CONTENT_TYPE_LATEST
 
+try:
+    import cv2  # type: ignore
+except Exception:  # pragma: no cover - optional dependency
+    cv2 = None
+
 logging.basicConfig(level=os.getenv("LOG_LEVEL", "INFO"))
 logger = logging.getLogger("edge-planet")
 
@@ -84,6 +89,9 @@ CLIENT_KEY = os.getenv("EDGE_CLIENT_KEY", "/certs/edge-planet.key")
 REQ_TIMEOUT = float(os.getenv("EDGE_REQUEST_TIMEOUT", "5"))
 RTSP_URL = os.getenv("RTSP_URL", "")
 MODEL_PATH = os.getenv("MODEL_PATH", "/models/default-model.json")
+REAL_INFERENCE_URL = os.getenv("REAL_INFERENCE_URL", "")
+CAMERA_POLL_INTERVAL_SECONDS = float(os.getenv("CAMERA_POLL_INTERVAL_SECONDS", "1.5"))
+CAMERA_MIN_CONFIDENCE = float(os.getenv("CAMERA_MIN_CONFIDENCE", "0.75"))
 
 FL_ENABLED = os.getenv("FL_ENABLED", "false").lower() == "true"
 FL_AGGREGATOR_URL = os.getenv("FL_AGGREGATOR_URL", "http://fl-aggregator:8200")
@@ -96,6 +104,8 @@ EVENT_TYPES = ["fire", "smoke", "intrusion", "motion", "fall_detection"]
 
 _stream_stop = Event()
 _stream_thread: Optional[Thread] = None
+_camera_stop = Event()
+_camera_thread: Optional[Thread] = None
 _fl_stop = Event()
 _fl_thread: Optional[Thread] = None
 _fl_lock = Lock()
@@ -216,6 +226,78 @@ def _fetch_global_model() -> None:
         logger.error("FL global model fetch failed: %s", exc)
 
 
+def _infer_event_type(frame_hash: str) -> tuple[str, float]:
+    if REAL_INFERENCE_URL:
+        try:
+            response = requests.post(
+                REAL_INFERENCE_URL,
+                json={"frame_hash": frame_hash, "source": "edge-planet", "rtsp": bool(RTSP_URL)},
+                timeout=REQ_TIMEOUT,
+            )
+            if response.status_code < 300:
+                payload = response.json()
+                event_type = str(payload.get("event_type") or "motion")
+                confidence = float(payload.get("confidence") or 0.0)
+                return event_type, max(0.0, min(1.0, confidence))
+        except requests.RequestException as exc:
+            logger.warning("real inference request failed: %s", exc)
+    return random.choice(EVENT_TYPES), round(random.uniform(0.7, 0.98), 2)
+
+
+def _camera_loop() -> None:
+    if not RTSP_URL:
+        logger.info("camera loop skipped: RTSP_URL not configured")
+        return
+    if cv2 is None:
+        logger.warning("camera loop skipped: opencv-python-headless is not installed")
+        return
+
+    api_key = DEFAULT_API_KEY
+    device_id = DEFAULT_DEVICE_ID or "rtsp-camera-1"
+    logger.info("camera loop started device_id=%s interval=%ss", device_id, CAMERA_POLL_INTERVAL_SECONDS)
+    cap = cv2.VideoCapture(RTSP_URL)
+
+    try:
+        while not _camera_stop.is_set():
+            if not cap.isOpened():
+                logger.warning("RTSP camera not open; retrying")
+                cap.release()
+                time.sleep(2)
+                cap = cv2.VideoCapture(RTSP_URL)
+                continue
+
+            ok, frame = cap.read()
+            if not ok or frame is None:
+                logger.warning("failed to read RTSP frame")
+                _camera_stop.wait(max(CAMERA_POLL_INTERVAL_SECONDS, 0.2))
+                continue
+
+            frame_hash = hashlib.sha256(frame.tobytes()).hexdigest()
+            event_type, confidence = _infer_event_type(frame_hash)
+            if confidence < CAMERA_MIN_CONFIDENCE:
+                _camera_stop.wait(max(CAMERA_POLL_INTERVAL_SECONDS, 0.2))
+                continue
+
+            event = EventPayload(
+                device_id=device_id,
+                event_type=event_type,
+                confidence=confidence,
+                location=DEFAULT_LOCATION,
+                frame_hash=frame_hash,
+                signature=random_hex(64),
+            )
+            try:
+                send_to_swarm(api_key, event)
+                logger.info("camera event published type=%s confidence=%.2f", event_type, confidence)
+            except HTTPException as exc:
+                logger.error("camera publish failed: %s", exc.detail)
+
+            _camera_stop.wait(max(CAMERA_POLL_INTERVAL_SECONDS, 0.2))
+    finally:
+        cap.release()
+        logger.info("camera loop stopped")
+
+
 def _push_local_update(weights: np.ndarray, sample_count: int) -> None:
     payload = {
         "client_id": FL_CLIENT_ID,
@@ -281,8 +363,12 @@ def health() -> dict:
 
 @app.on_event("startup")
 def startup() -> None:
-    global _fl_thread
+    global _fl_thread, _camera_thread
     _load_custom_model()
+    if RTSP_URL and (not _camera_thread or not _camera_thread.is_alive()):
+        _camera_stop.clear()
+        _camera_thread = Thread(target=_camera_loop, daemon=True)
+        _camera_thread.start()
     if FL_ENABLED and (not _fl_thread or not _fl_thread.is_alive()):
         _fl_stop.clear()
         _fl_thread = Thread(target=_fl_loop, daemon=True)
@@ -291,6 +377,7 @@ def startup() -> None:
 
 @app.on_event("shutdown")
 def shutdown() -> None:
+    _camera_stop.set()
     _fl_stop.set()
 
 
@@ -408,6 +495,9 @@ def current_config() -> dict:
         "default_device_id": DEFAULT_DEVICE_ID,
         "default_location": DEFAULT_LOCATION,
         "rtsp_url": RTSP_URL,
+        "real_inference_url": REAL_INFERENCE_URL,
+        "camera_poll_interval_seconds": CAMERA_POLL_INTERVAL_SECONDS,
+        "camera_min_confidence": CAMERA_MIN_CONFIDENCE,
         "model_path": MODEL_PATH,
         "custom_model_loaded": _custom_model_loaded,
         "custom_model_name": _custom_model_name,
@@ -419,6 +509,37 @@ def current_config() -> dict:
         "fl_client_id": FL_CLIENT_ID,
         "fl_sync_interval_seconds": FL_SYNC_INTERVAL_SECONDS,
     }
+
+
+@app.get("/camera/status")
+def camera_status() -> dict:
+    return {
+        "rtsp_url_configured": bool(RTSP_URL),
+        "opencv_available": cv2 is not None,
+        "thread_running": bool(_camera_thread and _camera_thread.is_alive()),
+        "poll_interval_seconds": CAMERA_POLL_INTERVAL_SECONDS,
+        "min_confidence": CAMERA_MIN_CONFIDENCE,
+        "real_inference_url": REAL_INFERENCE_URL,
+    }
+
+
+@app.post("/camera/start")
+def camera_start() -> dict:
+    global _camera_thread
+    if not RTSP_URL:
+        raise HTTPException(status_code=400, detail="RTSP_URL is not configured")
+    if _camera_thread and _camera_thread.is_alive():
+        raise HTTPException(status_code=409, detail="camera loop already running")
+    _camera_stop.clear()
+    _camera_thread = Thread(target=_camera_loop, daemon=True)
+    _camera_thread.start()
+    return {"status": "started", "rtsp_url_configured": True}
+
+
+@app.post("/camera/stop")
+def camera_stop() -> dict:
+    _camera_stop.set()
+    return {"status": "stopping"}
 
 
 @app.post("/debug/payload")
