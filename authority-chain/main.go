@@ -30,6 +30,8 @@ type Event struct {
 	DeviceID     string  `json:"device_id"`
 	EventType    string  `json:"event_type"`
 	Confidence   float64 `json:"confidence"`
+	Description  string  `json:"description,omitempty"`
+	LLMReason    string  `json:"llm_reason,omitempty"`
 	Location     string  `json:"location,omitempty"`
 	FrameHash    string  `json:"frame_hash,omitempty"`
 	Signature    string  `json:"signature,omitempty"`
@@ -43,12 +45,13 @@ type requestContext struct {
 }
 
 type nestedEvent struct {
-	DeviceID   string  `json:"device_id"`
-	EventType  string  `json:"event_type"`
-	Confidence float64 `json:"confidence"`
-	Location   string  `json:"location,omitempty"`
-	FrameHash  string  `json:"frame_hash,omitempty"`
-	Signature  string  `json:"signature,omitempty"`
+	DeviceID    string  `json:"device_id"`
+	EventType   string  `json:"event_type"`
+	Confidence  float64 `json:"confidence"`
+	Description string  `json:"description,omitempty"`
+	Location    string  `json:"location,omitempty"`
+	FrameHash   string  `json:"frame_hash,omitempty"`
+	Signature   string  `json:"signature,omitempty"`
 }
 
 type nestedSubmission struct {
@@ -66,6 +69,7 @@ type simpleSubmission struct {
 	EventType    string  `json:"event_type"`
 	Confidence   float64 `json:"confidence"`
 	ConfidenceF  float64 `json:"confidence_f"`
+	Description  string  `json:"description,omitempty"`
 	FrameHash    string  `json:"frame_hash,omitempty"`
 	Signature    string  `json:"signature,omitempty"`
 	EnvelopeID   string  `json:"envelope_id,omitempty"`
@@ -82,7 +86,9 @@ var (
 
 	jwtSecret      = envOrDefault("JWT_SECRET", "CHANGE_ME_generate_with_openssl_rand_hex_32")
 	internalAPIKey = os.Getenv("INTERNAL_API_KEY")
-	authServiceURL  = envOrDefault("AUTH_SERVICE_URL", "http://auth-service:8700")
+	authServiceURL = envOrDefault("AUTH_SERVICE_URL", "http://auth-service:8700")
+	llmServiceURL  = envOrDefault("LLM_SERVICE_URL", "http://llm-service:8600")
+	llmTimeout     = timeoutFromEnv("LLM_TIMEOUT", 2*time.Second)
 )
 
 func main() {
@@ -96,6 +102,23 @@ func envOrDefault(key, fallback string) string {
 		return fallback
 	}
 	return value
+}
+
+func timeoutFromEnv(key string, fallback time.Duration) time.Duration {
+	raw := strings.TrimSpace(os.Getenv(key))
+	if raw == "" {
+		return fallback
+	}
+	if strings.IndexFunc(raw, func(r rune) bool { return r < '0' || r > '9' }) == -1 {
+		if seconds, err := time.ParseDuration(raw + "s"); err == nil {
+			return seconds
+		}
+	}
+	if d, err := time.ParseDuration(raw); err == nil {
+		return d
+	}
+	log.Printf("invalid duration for %s=%q, using fallback %s", key, raw, fallback)
+	return fallback
 }
 
 func startGRPCServer() {
@@ -281,6 +304,7 @@ func parseSubmission(body []byte) (Event, string, error) {
 			DeviceID:     submitted.Event.DeviceID,
 			EventType:    submitted.Event.EventType,
 			Confidence:   submitted.Event.Confidence,
+			Description:  submitted.Event.Description,
 			Location:     submitted.Event.Location,
 			FrameHash:    submitted.Event.FrameHash,
 			Signature:    submitted.Event.Signature,
@@ -315,11 +339,79 @@ func parseSubmission(body []byte) (Event, string, error) {
 		DeviceID:     deviceID,
 		EventType:    eventType,
 		Confidence:   confidence,
+		Description:  submitted.Description,
 		Location:     submitted.Location,
 		FrameHash:    submitted.FrameHash,
 		Signature:    submitted.Signature,
 	}
 	return event, strings.TrimSpace(submitted.APIKey), nil
+}
+
+func clampConfidence(v float64) float64 {
+	if v < 0 {
+		return 0
+	}
+	if v > 1 {
+		return 1
+	}
+	return v
+}
+
+func clampAdjustment(v float64) float64 {
+	if v < -0.2 {
+		return -0.2
+	}
+	if v > 0.2 {
+		return 0.2
+	}
+	return v
+}
+
+func classifyEventConfidence(event Event) (float64, string, error) {
+	if llmServiceURL == "" {
+		return 0.0, "llm service disabled", nil
+	}
+
+	description := strings.TrimSpace(event.Description)
+	if description == "" {
+		description = fmt.Sprintf("event_type=%s location=%s device_id=%s", event.EventType, event.Location, event.DeviceID)
+	}
+
+	reqBody, _ := json.Marshal(map[string]any{
+		"event_type":  event.EventType,
+		"description": description,
+	})
+
+	req, err := http.NewRequest(http.MethodPost, llmServiceURL+"/classify", bytes.NewReader(reqBody))
+	if err != nil {
+		return 0.0, "classification request error", err
+	}
+	req.Header.Set("Content-Type", "application/json")
+	if internalAPIKey != "" {
+		req.Header.Set("X-Internal-Auth", internalAPIKey)
+	}
+
+	client := &http.Client{Timeout: llmTimeout}
+	resp, err := client.Do(req)
+	if err != nil {
+		return 0.0, "classification service unavailable", err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(io.LimitReader(resp.Body, 256))
+		return 0.0, "classification non-200 response", fmt.Errorf("status=%d body=%s", resp.StatusCode, strings.TrimSpace(string(body)))
+	}
+
+	var parsed struct {
+		ConfidenceAdjustment float64 `json:"confidence_adjustment"`
+		Reason               string  `json:"reason"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&parsed); err != nil {
+		return 0.0, "classification parse error", err
+	}
+
+	return clampAdjustment(parsed.ConfidenceAdjustment), parsed.Reason, nil
 }
 
 func eventsHandler(w http.ResponseWriter, r *http.Request) {
@@ -363,6 +455,13 @@ func eventsHandler(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, "org_id missing", http.StatusUnauthorized)
 			return
 		}
+
+		adjustment, reason, classifyErr := classifyEventConfidence(event)
+		if classifyErr != nil {
+			log.Printf("llm classify warning: %v", classifyErr)
+		}
+		event.Confidence = clampConfidence(event.Confidence + adjustment)
+		event.LLMReason = reason
 
 		if event.ID == "" {
 			if event.EnvelopeID != "" {
