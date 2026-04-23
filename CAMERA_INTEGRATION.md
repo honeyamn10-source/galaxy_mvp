@@ -19,6 +19,7 @@ Optional:
 - REAL_INFERENCE_URL: HTTP endpoint for real inference results.
 - CAMERA_POLL_INTERVAL_SECONDS: frame polling interval. Default: 1.5.
 - CAMERA_MIN_CONFIDENCE: minimum confidence threshold. Default: 0.75.
+- EDGE_EVENT_TYPES: comma-separated allowed event classes for fallback generation.
 - EDGE_DEVICE_ID: override camera device id.
 
 If REAL_INFERENCE_URL is not set, Edge Planet falls back to local synthetic classification for demo continuity.
@@ -51,6 +52,21 @@ Expected response:
   "event_type": "intrusion",
   "confidence": 0.92
 }
+
+The inference response may also return a `labels` array. In that case Edge Planet
+maps common safety labels to event classes, including firearm/weapon keywords.
+
+## Local Laptop Camera (USB) Notes
+
+For direct laptop webcam testing, prefer exposing your webcam as an RTSP stream,
+then set RTSP_URL to that stream. This keeps production and local flows aligned.
+
+Example event types for safety monitoring:
+- fire
+- smoke
+- intrusion
+- weapon_detection
+- gun_detection
 
 ## Notes
 

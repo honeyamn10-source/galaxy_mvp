@@ -89,6 +89,7 @@ var (
 	authServiceURL = envOrDefault("AUTH_SERVICE_URL", "http://auth-service:8700")
 	llmServiceURL  = envOrDefault("LLM_SERVICE_URL", "http://llm-service:8600")
 	llmTimeout     = timeoutFromEnv("LLM_TIMEOUT", 2*time.Second)
+	allowPublicRead = strings.EqualFold(envOrDefault("AUTHORITY_ALLOW_PUBLIC_READ", "true"), "true")
 )
 
 func main() {
@@ -415,10 +416,16 @@ func classifyEventConfidence(event Event) (float64, string, error) {
 }
 
 func eventsHandler(w http.ResponseWriter, r *http.Request) {
-	ctx, err := requestContextFromHTTP(r)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusUnauthorized)
-		return
+	ctx := requestContext{}
+	if r.Method == http.MethodGet && allowPublicRead {
+		ctx = requestContext{Internal: true, OrgID: "public"}
+	} else {
+		resolvedCtx, err := requestContextFromHTTP(r)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusUnauthorized)
+			return
+		}
+		ctx = resolvedCtx
 	}
 
 	switch r.Method {

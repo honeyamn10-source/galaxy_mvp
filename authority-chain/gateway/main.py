@@ -447,8 +447,25 @@ def list_events(limit: int = 50) -> Dict:
     rows = list(store)
     rows = rows[-limit:]
     rows.reverse()
+    # Keep nested `event` payload intact while exposing commonly-used top-level
+    # fields for backward compatibility with older integrations/tests.
+    normalized: List[Dict] = []
+    for row in rows:
+        event = row.get("event") or {}
+        normalized.append(
+            {
+                **row,
+                "device_id": row.get("device_id") or event.get("device_id"),
+                "event_type": row.get("event_type") or event.get("event_type"),
+                "confidence": row.get("confidence")
+                if row.get("confidence") is not None
+                else event.get("confidence"),
+                "location": row.get("location") or event.get("location"),
+                "frame_hash": row.get("frame_hash") or event.get("frame_hash"),
+            }
+        )
     return {
-        "events": rows,
+        "events": normalized,
         "total": len(store),
     }
 

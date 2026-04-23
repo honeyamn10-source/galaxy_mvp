@@ -35,6 +35,7 @@ services:
     build: ./auth-service
     container_name: galaxy-auth-service
     environment:
+      ENVIRONMENT: ${ENVIRONMENT:-development}
       DATABASE_URL: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@postgres:5432/${POSTGRES_DB:-galaxy}
       JWT_SECRET: ${JWT_SECRET:-change-me-generate-with-openssl-rand-hex-32}
       INTERNAL_API_KEY: ${INTERNAL_API_KEY:-change-me-internal-service-key}
@@ -312,6 +313,9 @@ services:
     build: ./llm-service
     container_name: galaxy-llm-service
     environment:
+      LLM_PROVIDER: ${LLM_PROVIDER:-auto}
+      OLLAMA_URL: ${OLLAMA_URL:-http://host.docker.internal:11434}
+      OLLAMA_MODEL: ${OLLAMA_MODEL:-llama3.1:8b}
       OPENROUTER_API_KEYS: ${OPENROUTER_API_KEYS:-}
       OPENROUTER_MODEL: ${OPENROUTER_MODEL:-openai/gpt-3.5-turbo}
       OPENROUTER_TIMEOUT: "30"
@@ -324,6 +328,8 @@ services:
       INTERNAL_API_KEY: ${INTERNAL_API_KEY:-change-me-internal-service-key}
     ports:
       - "8600:8600"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     volumes:
       - ./shared:/app/shared:ro,z
     healthcheck:
