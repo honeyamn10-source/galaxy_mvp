@@ -41,17 +41,17 @@ else
 fi
 echo ""
 
-# Test 2: Check if required model is available
-echo "Test 2: DeepSeek Model Availability"
+# Test 2: Check if at least one Ollama model is available
+echo "Test 2: Ollama Model Availability"
 echo "---"
 response=$(curl -s http://localhost:11434/api/tags 2>/dev/null || echo "")
-if echo "$response" | grep -q "deepseek"; then
-    test_result 0 "DeepSeek model is available in Ollama"
+if echo "$response" | jq -e '.models | length > 0' > /dev/null 2>&1; then
+    test_result 0 "At least one Ollama model is available"
     echo "  Available models:"
     echo "$response" | jq -r '.models[].name' | sed 's/^/    /' 2>/dev/null || echo "    (could not parse model list)"
 else
-    test_result 1 "DeepSeek model not found"
-    echo -e "${YELLOW}Hint: Pull the model with: ollama pull deepseek-llm:6.7b${NC}"
+    test_result 1 "No Ollama models found"
+    echo -e "${YELLOW}Hint: Pull a model with: ollama pull llama3.1:8b${NC}"
 fi
 echo ""
 
@@ -65,7 +65,8 @@ if [ "$response" = "200" ]; then
     health=$(curl -s http://localhost:8600/health 2>/dev/null)
     echo "  Service status: $(echo "$health" | jq -r '.status' 2>/dev/null || echo "unknown")"
     echo "  LLM enabled: $(echo "$health" | jq -r '.llm_enabled' 2>/dev/null || echo "unknown")"
-    echo "  Ollama available: $(echo "$health" | jq -r '.ollama_available' 2>/dev/null || echo "unknown")"
+    echo "  Provider: $(echo "$health" | jq -r '.provider' 2>/dev/null || echo "unknown")"
+    echo "  Model: $(echo "$health" | jq -r '.model' 2>/dev/null || echo "unknown")"
 else
     test_result 1 "LLM service is not reachable (HTTP $response)"
     echo -e "${YELLOW}Hint: Is the LLM service running? Try: docker-compose up llm-service${NC}"
@@ -142,30 +143,26 @@ else
 fi
 echo ""
 
-# Test 7: Test end-to-end event submission
-echo "Test 7: End-to-End Event Submission with LLM"
+# Test 7: Test end-to-end event submission through Edge
+echo "Test 7: End-to-End Event Submission via Edge"
 echo "---"
-submit_response=$(curl -s -X POST http://localhost:1317/galaxy/v1/events \
+submit_response=$(curl -s -X POST http://localhost:8100/events \
     -H "Content-Type: application/json" \
     -d '{
-        "submitter": "test-user",
-        "envelope_id": "test-env-'$(date +%s)'",
-        "origin_peer_id": "test-peer",
-        "event": {
-            "device_id": "test-device",
-            "event_type": "intrusion_attempt",
-            "confidence": 0.65,
-            "frame_hash": "test123",
+        "device_id": "test-device",
+        "event_type": "intrusion_attempt",
+        "confidence": 0.65,
+        "metadata": {
             "location": "test-location"
         }
     }' 2>/dev/null || echo "")
 
 if echo "$submit_response" | jq . > /dev/null 2>&1; then
     status=$(echo "$submit_response" | jq -r '.status' 2>/dev/null || echo "unknown")
-    height=$(echo "$submit_response" | jq -r '.height' 2>/dev/null || echo "unknown")
+    event_id=$(echo "$submit_response" | jq -r '.event_id // .id // "unknown"' 2>/dev/null)
     test_result 0 "Event submission successful"
     echo "  Status: $status"
-    echo "  Height: $height"
+    echo "  Event ID: $event_id"
 else
     test_result 1 "Event submission failed or returned invalid response"
     echo "  Response was: $submit_response"

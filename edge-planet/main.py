@@ -93,14 +93,20 @@ REAL_INFERENCE_URL = os.getenv("REAL_INFERENCE_URL", "")
 CAMERA_POLL_INTERVAL_SECONDS = float(os.getenv("CAMERA_POLL_INTERVAL_SECONDS", "1.5"))
 CAMERA_MIN_CONFIDENCE = float(os.getenv("CAMERA_MIN_CONFIDENCE", "0.75"))
 
+_event_types_raw = os.getenv(
+    "EDGE_EVENT_TYPES",
+    "fire,smoke,intrusion,motion,fall_detection,weapon_detection,gun_detection",
+)
+EVENT_TYPES = [e.strip() for e in _event_types_raw.split(",") if e.strip()]
+if not EVENT_TYPES:
+    EVENT_TYPES = ["fire", "smoke", "intrusion", "motion", "fall_detection"]
+
 FL_ENABLED = os.getenv("FL_ENABLED", "false").lower() == "true"
 FL_AGGREGATOR_URL = os.getenv("FL_AGGREGATOR_URL", "http://fl-aggregator:8200")
 FL_CLIENT_ID = os.getenv("FL_CLIENT_ID", "edge-planet-1")
 FL_TOKEN = os.getenv("FL_AUTH_TOKEN", "")
 FL_MODEL_DIM = int(os.getenv("FL_MODEL_DIM", "32"))
 FL_SYNC_INTERVAL_SECONDS = int(os.getenv("FL_SYNC_INTERVAL_SECONDS", "120"))
-
-EVENT_TYPES = ["fire", "smoke", "intrusion", "motion", "fall_detection"]
 
 _stream_stop = Event()
 _stream_thread: Optional[Thread] = None
@@ -236,9 +242,26 @@ def _infer_event_type(frame_hash: str) -> tuple[str, float]:
             )
             if response.status_code < 300:
                 payload = response.json()
-                event_type = str(payload.get("event_type") or "motion")
+                event_type = payload.get("event_type")
                 confidence = float(payload.get("confidence") or 0.0)
-                return event_type, max(0.0, min(1.0, confidence))
+
+                if not event_type:
+                    labels = payload.get("labels")
+                    if isinstance(labels, list) and labels:
+                        labels_text = " ".join(str(x).lower() for x in labels)
+                        if "gun" in labels_text or "weapon" in labels_text or "firearm" in labels_text:
+                            event_type = "gun_detection"
+                        elif "fire" in labels_text:
+                            event_type = "fire"
+                        elif "smoke" in labels_text:
+                            event_type = "smoke"
+                        elif "intrud" in labels_text or "unauthorized" in labels_text:
+                            event_type = "intrusion"
+                        else:
+                            event_type = "motion"
+
+                normalized_type = str(event_type or "motion")
+                return normalized_type, max(0.0, min(1.0, confidence))
         except requests.RequestException as exc:
             logger.warning("real inference request failed: %s", exc)
     return random.choice(EVENT_TYPES), round(random.uniform(0.7, 0.98), 2)

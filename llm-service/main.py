@@ -28,11 +28,14 @@ app.add_middleware(
 )
 
 # Configuration
+LLM_PROVIDER = os.getenv("LLM_PROVIDER", "auto").strip().lower()
 OPENROUTER_BASE_URL = os.getenv("OPENROUTER_BASE_URL", "https://openrouter.ai/api/v1")
 OPENROUTER_MODEL = os.getenv("OPENROUTER_MODEL", "openai/gpt-3.5-turbo")
 OPENROUTER_TIMEOUT = int(os.getenv("OPENROUTER_TIMEOUT", "30"))
 OPENROUTER_SITE_URL = os.getenv("OPENROUTER_SITE_URL", "https://localhost")
 OPENROUTER_APP_NAME = os.getenv("OPENROUTER_APP_NAME", "galaxy-mvp")
+OLLAMA_URL = os.getenv("OLLAMA_URL", "http://host.docker.internal:11434")
+OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "llama3.1:8b")
 LLM_ENABLED = os.getenv("LLM_ENABLED", "true").lower() in ("true", "1", "yes")
 _api_keys = [key.strip() for key in os.getenv("OPENROUTER_API_KEYS", "").split(",") if key.strip()]
 _key_lock = threading.Lock()
@@ -144,6 +147,82 @@ async def call_openrouter(
     return None, f"openrouter failed for keys {tried}"
 
 
+async def call_ollama(
+    prompt: str,
+    max_tokens: int = 200,
+    system_prompt: Optional[str] = None,
+) -> tuple[Optional[str], Optional[str]]:
+    if not LLM_ENABLED:
+        return None, "llm disabled"
+
+    messages: list[dict[str, str]] = []
+    if system_prompt:
+        messages.append({"role": "system", "content": system_prompt})
+    messages.append({"role": "user", "content": prompt})
+
+    try:
+        async with httpx.AsyncClient(timeout=OPENROUTER_TIMEOUT) as client:
+            response = await client.post(
+                f"{OLLAMA_URL}/api/chat",
+                json={
+                    "model": OLLAMA_MODEL,
+                    "messages": messages,
+                    "stream": False,
+                    "options": {"num_predict": max_tokens},
+                },
+            )
+            response.raise_for_status()
+            data = response.json()
+            content = str(data.get("message", {}).get("content", "")).strip()
+            if content:
+                return content, None
+            return None, "empty ollama response content"
+    except httpx.HTTPError as exc:
+        return None, f"ollama request failed: {exc}"
+
+
+def _provider_order() -> list[str]:
+    if LLM_PROVIDER in ("openrouter", "ollama"):
+        return [LLM_PROVIDER]
+    return ["ollama", "openrouter"]
+
+
+def _configured_provider_name() -> str:
+    return "auto(ollama->openrouter)" if LLM_PROVIDER == "auto" else LLM_PROVIDER
+
+
+def _configured_model_name() -> str:
+    if LLM_PROVIDER == "openrouter":
+        return OPENROUTER_MODEL
+    if LLM_PROVIDER == "ollama":
+        return OLLAMA_MODEL
+    return f"{OLLAMA_MODEL} | {OPENROUTER_MODEL}"
+
+
+async def call_llm(
+    prompt: str,
+    max_tokens: int = 200,
+    system_prompt: Optional[str] = None,
+) -> tuple[Optional[str], Optional[str], str]:
+    errors: list[str] = []
+
+    for provider in _provider_order():
+        if provider == "ollama":
+            content, error = await call_ollama(prompt, max_tokens=max_tokens, system_prompt=system_prompt)
+            if content:
+                return content, None, "ollama"
+            errors.append(error or "ollama unavailable")
+            continue
+
+        if provider == "openrouter":
+            content, error = await call_openrouter(prompt, max_tokens=max_tokens, system_prompt=system_prompt)
+            if content:
+                return content, None, "openrouter"
+            errors.append(error or "openrouter unavailable")
+
+    return None, "; ".join(errors) if errors else "no llm provider available", "fallback"
+
+
 def _extract_json_block(text: str) -> Optional[dict[str, Any]]:
     match = re.search(r"\{.*\}", text, re.DOTALL)
     if not match:
@@ -170,8 +249,8 @@ def health() -> HealthResponse:
         status="ok",
         service="llm-service",
         llm_enabled=LLM_ENABLED,
-        provider="openrouter",
-        model=OPENROUTER_MODEL,
+        provider=_configured_provider_name(),
+        model=_configured_model_name(),
         keys_configured=len(_api_keys),
     )
 
@@ -194,13 +273,13 @@ async def analyze_event(req: EventAnalysisRequest) -> EventAnalysisResponse:
         f"location={req.location or 'none'}; context={req.context or 'none'}."
     )
 
-    content, error = await call_openrouter(prompt, max_tokens=120)
+    content, error, source = await call_llm(prompt, max_tokens=120)
     if not content:
         verdict = "genuine" if req.confidence >= 0.8 else "suspicious"
         return EventAnalysisResponse(
             verdict=verdict,
             confidence=req.confidence,
-            analysis="OpenRouter fallback",
+            analysis=f"{source} fallback",
             reasoning=error or "provider unavailable",
         )
 
@@ -216,7 +295,7 @@ async def analyze_event(req: EventAnalysisRequest) -> EventAnalysisResponse:
 
         reasoning = data.get("reasoning", "")
 
-        return EventAnalysisResponse(verdict=verdict, confidence=conf, analysis="OpenRouter", reasoning=reasoning or "n/a")
+        return EventAnalysisResponse(verdict=verdict, confidence=conf, analysis=source, reasoning=reasoning or "n/a")
 
     except (json.JSONDecodeError, ValueError, KeyError) as e:
         logger.error("Failed to parse OpenRouter response: %s. Content was: %s", e, content)
@@ -224,7 +303,7 @@ async def analyze_event(req: EventAnalysisRequest) -> EventAnalysisResponse:
         return EventAnalysisResponse(
             verdict=verdict,
             confidence=req.confidence,
-            analysis="OpenRouter parsing fallback",
+            analysis=f"{source} parsing fallback",
             reasoning="fallback by confidence threshold",
         )
 
@@ -237,12 +316,12 @@ async def classify_event(req: ClassifyRequest) -> dict[str, Any]:
         f"event_type={req.event_type}; description={req.description or 'none'}."
     )
 
-    content, error = await call_openrouter(prompt, max_tokens=80)
+    content, error, source = await call_llm(prompt, max_tokens=80)
     if not content:
         return {
             "confidence_adjustment": 0.0,
             "reason": f"fallback: {error or 'provider unavailable'}",
-            "model": OPENROUTER_MODEL,
+            "model": source,
         }
 
     parsed = _extract_json_block(content)
@@ -256,7 +335,7 @@ async def classify_event(req: ClassifyRequest) -> dict[str, Any]:
     return {
         "confidence_adjustment": _clamp_adjustment(parsed.get("confidence_adjustment", 0.0)),
         "reason": str(parsed.get("reason", "model-adjusted"))[:200],
-        "model": OPENROUTER_MODEL,
+        "model": source,
     }
 
 
@@ -281,12 +360,12 @@ async def chat(req: ChatRequest) -> ChatResponse:
         "If the user asks about anything outside Galaxy MVP, reply briefly that you can only help with Galaxy MVP topics."
     )
 
-    content, error = await call_openrouter(prompt, system_prompt=system_prompt)
+    content, error, source = await call_llm(prompt, system_prompt=system_prompt)
 
     if not content:
         return ChatResponse(answer=f"LLM fallback response: {error or 'service unavailable'}", model="fallback")
 
-    return ChatResponse(answer=content, model=OPENROUTER_MODEL)
+    return ChatResponse(answer=content, model=source)
 
 
 if __name__ == "__main__":
@@ -296,11 +375,12 @@ if __name__ == "__main__":
     port = int(os.getenv("LLM_PORT", "8600"))
 
     logger.info(
-        "Starting LLM service on %s:%d (OpenRouter base=%s model=%s keys=%d enabled=%s)",
+        "Starting LLM service on %s:%d (provider=%s openrouter_model=%s ollama_model=%s keys=%d enabled=%s)",
         host,
         port,
-        OPENROUTER_BASE_URL,
+        _configured_provider_name(),
         OPENROUTER_MODEL,
+        OLLAMA_MODEL,
         len(_api_keys),
         LLM_ENABLED,
     )
