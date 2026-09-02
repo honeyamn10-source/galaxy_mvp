@@ -1,3 +1,4 @@
+import hmac
 import os
 
 import jwt
@@ -9,14 +10,17 @@ _security = HTTPBearer(auto_error=False)
 
 
 def _jwt_secret() -> str:
-    secret = os.getenv("JWT_SECRET", "CHANGE_ME_generate_with_openssl_rand_hex_32")
-    if not secret:
-        raise HTTPException(status_code=500, detail="JWT secret is not configured")
+    secret = os.getenv("JWT_SECRET", "")
+    if len(secret) < 32 or secret.startswith(("CHANGE_ME", "change-me")):
+        raise HTTPException(status_code=503, detail="Authentication service is not configured")
     return secret
 
 
 def _internal_key() -> str:
-    return os.getenv("INTERNAL_API_KEY", "CHANGE_ME_internal_service_key")
+    key = os.getenv("INTERNAL_API_KEY", "")
+    if len(key) < 32 or key.startswith(("CHANGE_ME", "change-me")):
+        raise HTTPException(status_code=503, detail="Internal authentication is not configured")
+    return key
 
 
 def decode_access_token(token: str) -> dict:
@@ -40,7 +44,7 @@ def require_access_token(creds: HTTPAuthorizationCredentials = Depends(_security
 
 
 def require_internal_auth(internal_key: str | None = None) -> dict:
-    if internal_key != _internal_key():
+    if not internal_key or not hmac.compare_digest(internal_key, _internal_key()):
         raise HTTPException(status_code=401, detail="Internal authentication required")
     return {"sub": "internal", "org_id": "internal", "role": "internal", "internal": True}
 
