@@ -1,6 +1,6 @@
 # Enhanced Autonomous Cognitive Galaxy v2.0
 
-Production-ready, decentralized AI event detection platform that combines edge inference, secure swarm propagation, blockchain authority, federated intelligence, compliance automation, Kubernetes hardening, and optional local LLM augmentation.
+Security-oriented development scaffold for a decentralized AI event detection platform that combines edge inference, secure swarm propagation, blockchain authority, federated intelligence, compliance automation, Kubernetes hardening, and optional local LLM augmentation.
 
 ## What This Project Delivers
 
@@ -16,13 +16,13 @@ Production-ready, decentralized AI event detection platform that combines edge i
 
 | Phase | Name | Status | Core Outcome |
 |---|---|---|---|
-| I | Edge & Backend | Complete | FastAPI backend, dashboard, PostgreSQL, Redis, edge ingestion |
-| II | Swarm Mesh | Complete | libp2p event mesh with mTLS and validator forwarding |
-| III | Blockchain Authority | Complete | Cosmos-like authority node and event voting surfaces |
-| IV | Intelligence | Complete | FL aggregator and predictive risk service |
-| V | Expansion & Economy | Complete | Compliance engine, webhooks, CosmWasm contracts, Hermes profile |
-| VI | Production Hardening | Complete | Kubernetes manifests, monitoring stack, CI/CD, backups |
-| LLM | DeepSeek Integration | Complete | Ollama-backed analysis and chat endpoints |
+| I | Edge & Backend | Implemented; verification required | FastAPI backend, dashboard, PostgreSQL, Redis, edge ingestion |
+| II | Swarm Mesh | Implemented; verification required | libp2p event mesh with mTLS and validator forwarding |
+| III | Blockchain Authority | Implemented; verification required | Cosmos-like authority node and event voting surfaces |
+| IV | Intelligence | Implemented; verification required | FL aggregator and predictive risk service |
+| V | Expansion & Economy | Implemented; verification required | Compliance engine, webhooks, CosmWasm contracts, Hermes profile |
+| VI | Production Hardening | Implemented; verification required | Kubernetes manifests, monitoring stack, CI/CD, backups |
+| LLM | DeepSeek Integration | Implemented; verification required | Ollama-backed analysis and chat endpoints |
 
 ## High-Level Architecture
 
@@ -141,7 +141,17 @@ flowchart LR
 - jq (recommended for JSON inspection)
 - Optional LLM path: Ollama with DeepSeek model
 
-### 2) Start Core Stack
+### 2) Configure required secrets
+
+```bash
+cp .env.example .env
+# Replace every <...> placeholder. Generate secrets with: openssl rand -hex 32
+docker compose config --quiet
+```
+
+See [SECURITY.md](SECURITY.md) and the [repository audit](docs/REPOSITORY_AUDIT.md) before any internet-facing deployment.
+
+### 3) Start Core Stack
 
 ```bash
 make swarm-up
@@ -153,7 +163,7 @@ Alternative:
 docker-compose up -d --build
 ```
 
-### 3) Check Service Health
+### 4) Check Service Health
 
 ```bash
 make health
@@ -164,13 +174,13 @@ curl -s http://localhost:8400/health
 curl -s http://localhost:8500/health
 ```
 
-### 4) Run Integration Test
+### 5) Run Integration Test
 
 ```bash
 make test
 ```
 
-### 5) Run the Demo Stack
+### 6) Run the Demo Stack
 
 ```bash
 ./demo.sh
@@ -191,7 +201,7 @@ If you only need to verify health and restart unhealthy services, run:
 ./preflight.sh
 ```
 
-### 5) Optional LLM Enablement
+### 7) Optional LLM Enablement
 
 Start Ollama and model:
 
