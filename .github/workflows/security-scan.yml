@@ -1,116 +1,70 @@
-name: Security - Vulnerability Scanning
+name: Security
 
 on:
   push:
-    branches: [ main, develop ]
+    branches: [main]
   pull_request:
-    branches: [ main, develop ]
+    branches: [main]
   schedule:
-    # Run daily at 2 AM UTC
-    - cron: '0 2 * * *'
+    - cron: "0 2 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
 
 jobs:
-  trivy-image-scan:
-    name: Trivy Image Scan
+  filesystem:
     runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        service:
-          - edge-planet
-          - backend
-          - authority-chain
-          - swarm-node
-          - fl-aggregator
-          - predictive-service
-          - webhook-service
-          - compliance-engine
-    
+    permissions:
+      contents: read
+      security-events: write
     steps:
       - uses: actions/checkout@v4
-      
-      - name: Build image for scanning
-        run: |
-          SERVICE_PATH=$(find . -name "${{ matrix.service }}" -type d | head -1)
-          docker build -f "$SERVICE_PATH/Dockerfile" -t "${{ matrix.service }}:scan" "$SERVICE_PATH"
-      
-      - name: Run Trivy vulnerability scanner
-        uses: aquasecurity/trivy-action@master
         with:
-          image-ref: '${{ matrix.service }}:scan'
-          format: 'sarif'
-          output: 'trivy-${{ matrix.service }}.sarif'
-        continue-on-error: true
-      
-      - name: Upload Trivy results to GitHub Security
-        uses: github/codeql-action/upload-sarif@v2
-        if: always()
+          fetch-depth: 0
+      - name: Scan repository
+        uses: aquasecurity/trivy-action@0.28.0
         with:
-          sarif_file: 'trivy-${{ matrix.service }}.sarif'
-          category: 'trivy-${{ matrix.service }}'
-        continue-on-error: true
-
-  trivy-repo-scan:
-    name: Trivy Repository Scan
-    runs-on: ubuntu-latest
-    
-    steps:
-      - uses: actions/checkout@v4
-      
-      - name: Run Trivy filesystem scan
-        uses: aquasecurity/trivy-action@master
+          scan-type: fs
+          scan-ref: .
+          scanners: vuln,secret,misconfig
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          exit-code: "1"
+          format: sarif
+          output: trivy.sarif
+      - name: Upload findings
+        if: always() && hashFiles('trivy.sarif') != ''
+        uses: github/codeql-action/upload-sarif@v3
         with:
-          scan-type: 'fs'
-          scan-ref: '.'
-          format: 'sarif'
-          output: 'trivy-repo.sarif'
-        continue-on-error: true
-      
-      - name: Upload to GitHub Security
-        uses: github/codeql-action/upload-sarif@v2
-        if: always()
-        with:
-          sarif_file: 'trivy-repo.sarif'
-          category: 'trivy-fs'
-        continue-on-error: true
-
-  dependency-check:
-    name: OWASP Dependency Check
-    runs-on: ubuntu-latest
-    
-    steps:
-      - uses: actions/checkout@v4
-      
-      - name: Run dependency-check
-        uses: dependency-check/Dependency-Check_Action@main
-        with:
-          path: '.'
-          format: 'JSON'
-          args: >
-            --enable-retired
-        continue-on-error: true
+          sarif_file: trivy.sarif
+          category: trivy-filesystem
 
   codeql:
-    name: CodeQL Analysis
     runs-on: ubuntu-latest
-    
     permissions:
+      contents: read
       security-events: write
-    
+      packages: read
     strategy:
+      fail-fast: false
       matrix:
-        language: [ 'python', 'go' ]
-    
+        language: [python, go, javascript-typescript]
     steps:
       - uses: actions/checkout@v4
-      
-      - name: Initialize CodeQL
-        uses: github/codeql-action/init@v2
+      - uses: github/codeql-action/init@v3
         with:
           languages: ${{ matrix.language }}
-      
-      - name: Autobuild
-        uses: github/codeql-action/autobuild@v2
-      
-      - name: Perform CodeQL Analysis
-        uses: github/codeql-action/analyze@v2
-        continue-on-error: true
+      - uses: github/codeql-action/autobuild@v3
+      - uses: github/codeql-action/analyze@v3
+
+  dependency-review:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/dependency-review-action@v4
+        with:
+          fail-on-severity: high
