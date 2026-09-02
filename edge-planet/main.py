@@ -1,4 +1,5 @@
 import hashlib
+import hmac
 import json
 import logging
 import os
@@ -11,10 +12,11 @@ from typing import Any, Optional
 
 import numpy as np
 import requests
-from fastapi import FastAPI, HTTPException
-from fastapi.middleware.cors import CORSMiddleware
+from fastapi import Depends, FastAPI, HTTPException
 from pydantic import BaseModel, Field
-from prometheus_client import Counter, Gauge, generate_latest, CONTENT_TYPE_LATEST
+from prometheus_client import Counter, Gauge, generate_latest
+
+from shared.security import configure_cors, prometheus_response, require_internal_auth, required_secret
 
 try:
     import cv2  # type: ignore
@@ -30,13 +32,7 @@ app = FastAPI(
     description="Phase II edge simulator that sends detections into the P2P swarm ingress.",
 )
 
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=False,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
+configure_cors(app)
 
 
 class EventPayload(BaseModel):
@@ -80,7 +76,7 @@ class EventsSubmitRequest(BaseModel):
 
 
 SWARM_INGEST_URL = os.getenv("SWARM_INGEST_URL", "https://swarm-node-1:8443/ingest")
-DEFAULT_API_KEY = os.getenv("EDGE_TENANT_API_KEY") or "edge-planet-local"
+DEFAULT_API_KEY = os.getenv("EDGE_TENANT_API_KEY", "").strip()
 DEFAULT_DEVICE_ID = os.getenv("EDGE_DEVICE_ID", "")
 DEFAULT_LOCATION = os.getenv("EDGE_DEFAULT_LOCATION", "Sector-A")
 VERIFY_CERT = os.getenv("EDGE_CA_CERT", "/certs/ca.crt")
@@ -148,10 +144,26 @@ def build_event(device_id: str, event_type: Optional[str], confidence: Optional[
     )
 
 
+def _event_signature(api_key: str, event: EventPayload) -> str:
+    canonical = "\n".join(
+        [
+            event.device_id,
+            event.event_type,
+            f"{event.confidence:.6f}",
+            event.location or "",
+            event.frame_hash or "",
+        ]
+    )
+    return hmac.new(
+        api_key.encode("utf-8"), canonical.encode("utf-8"), hashlib.sha256
+    ).hexdigest()
+
+
 def send_to_swarm(api_key: str, event: EventPayload) -> dict:
     if not api_key:
-        raise HTTPException(status_code=400, detail="api_key is required")
+        raise HTTPException(status_code=500, detail="edge API key is not configured")
 
+    event.signature = _event_signature(api_key, event)
     payload = {"api_key": api_key, "event": event.model_dump()}
 
     try:
@@ -387,6 +399,9 @@ def health() -> dict:
 @app.on_event("startup")
 def startup() -> None:
     global _fl_thread, _camera_thread
+    required_secret("EDGE_TENANT_API_KEY", minimum_length=24)
+    if FL_ENABLED:
+        required_secret("FL_AUTH_TOKEN", minimum_length=24)
     _load_custom_model()
     if RTSP_URL and (not _camera_thread or not _camera_thread.is_alive()):
         _camera_stop.clear()
@@ -405,7 +420,7 @@ def shutdown() -> None:
 
 
 @app.post("/emit")
-def emit_once(request: EmitRequest) -> dict:
+def emit_once(request: EmitRequest, _: dict = Depends(require_internal_auth)) -> dict:
     api_key = request.api_key or DEFAULT_API_KEY
     device_id = request.device_id or DEFAULT_DEVICE_ID
     if not device_id:
@@ -421,7 +436,7 @@ def emit_once(request: EmitRequest) -> dict:
 
 
 @app.post("/events")
-def submit_event(request: EventsSubmitRequest) -> dict:
+def submit_event(request: EventsSubmitRequest, _: dict = Depends(require_internal_auth)) -> dict:
     # Compatibility endpoint retained for Phase V test flow and legacy clients.
     api_key = DEFAULT_API_KEY
     if not api_key:
@@ -447,7 +462,7 @@ def submit_event(request: EventsSubmitRequest) -> dict:
 
 
 @app.post("/emit-batch")
-def emit_batch(request: EmitBatchRequest) -> dict:
+def emit_batch(request: EmitBatchRequest, _: dict = Depends(require_internal_auth)) -> dict:
     api_key = request.api_key or DEFAULT_API_KEY
     device_id = request.device_id or DEFAULT_DEVICE_ID
     if not device_id:
@@ -469,7 +484,7 @@ def emit_batch(request: EmitBatchRequest) -> dict:
 
 
 @app.post("/stream/start")
-def start_stream(request: StreamRequest) -> dict:
+def start_stream(request: StreamRequest, _: dict = Depends(require_internal_auth)) -> dict:
     global _stream_thread
 
     if _stream_thread and _stream_thread.is_alive():
@@ -506,18 +521,18 @@ def start_stream(request: StreamRequest) -> dict:
 
 
 @app.post("/stream/stop")
-def stop_stream() -> dict:
+def stop_stream(_: dict = Depends(require_internal_auth)) -> dict:
     _stream_stop.set()
     return {"status": "stopping"}
 
 
 @app.get("/config")
-def current_config() -> dict:
+def current_config(_: dict = Depends(require_internal_auth)) -> dict:
     return {
         "swarm_ingest_url": SWARM_INGEST_URL,
         "default_device_id": DEFAULT_DEVICE_ID,
         "default_location": DEFAULT_LOCATION,
-        "rtsp_url": RTSP_URL,
+        "rtsp_url_configured": bool(RTSP_URL),
         "real_inference_url": REAL_INFERENCE_URL,
         "camera_poll_interval_seconds": CAMERA_POLL_INTERVAL_SECONDS,
         "camera_min_confidence": CAMERA_MIN_CONFIDENCE,
@@ -535,7 +550,7 @@ def current_config() -> dict:
 
 
 @app.get("/camera/status")
-def camera_status() -> dict:
+def camera_status(_: dict = Depends(require_internal_auth)) -> dict:
     return {
         "rtsp_url_configured": bool(RTSP_URL),
         "opencv_available": cv2 is not None,
@@ -547,7 +562,7 @@ def camera_status() -> dict:
 
 
 @app.post("/camera/start")
-def camera_start() -> dict:
+def camera_start(_: dict = Depends(require_internal_auth)) -> dict:
     global _camera_thread
     if not RTSP_URL:
         raise HTTPException(status_code=400, detail="RTSP_URL is not configured")
@@ -560,13 +575,13 @@ def camera_start() -> dict:
 
 
 @app.post("/camera/stop")
-def camera_stop() -> dict:
+def camera_stop(_: dict = Depends(require_internal_auth)) -> dict:
     _camera_stop.set()
     return {"status": "stopping"}
 
 
 @app.post("/debug/payload")
-def debug_payload(request: EmitRequest) -> dict:
+def debug_payload(request: EmitRequest, _: dict = Depends(require_internal_auth)) -> dict:
     api_key = request.api_key or DEFAULT_API_KEY
     device_id = request.device_id or DEFAULT_DEVICE_ID
     event = build_event(device_id or "missing-device", request.event_type, request.confidence, request.location)
@@ -580,7 +595,7 @@ def debug_payload(request: EmitRequest) -> dict:
 
 
 @app.get("/fl/status")
-def fl_status() -> dict:
+def fl_status(_: dict = Depends(require_internal_auth)) -> dict:
     return {
         "enabled": FL_ENABLED,
         "client_id": FL_CLIENT_ID,
@@ -591,7 +606,7 @@ def fl_status() -> dict:
 
 
 @app.post("/fl/train-once")
-def fl_train_once() -> dict:
+def fl_train_once(_: dict = Depends(require_internal_auth)) -> dict:
     if not FL_ENABLED:
         raise HTTPException(status_code=409, detail="federated learning is disabled")
 
@@ -612,4 +627,4 @@ def fl_train_once() -> dict:
 @app.get("/metrics")
 def metrics():
     fl_model_version_gauge.set(_fl_version)
-    return generate_latest()
+    return prometheus_response(generate_latest())

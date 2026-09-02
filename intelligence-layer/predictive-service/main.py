@@ -1,4 +1,5 @@
 import hashlib
+import hmac
 import logging
 import os
 import threading
@@ -9,12 +10,16 @@ from typing import Any
 import numpy as np
 import requests
 from fastapi import Depends, FastAPI
-from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from xgboost import XGBClassifier
 from prometheus_client import Counter, Gauge, generate_latest
 
-from shared.auth_middleware import require_request_context
+from shared.auth_middleware import (
+    configure_cors,
+    prometheus_response,
+    require_request_context,
+    required_secret,
+)
 
 logging.basicConfig(level=os.getenv("LOG_LEVEL", "INFO"))
 logger = logging.getLogger("predictive-service")
@@ -25,17 +30,11 @@ app = FastAPI(
     description="Phase IV predictive analytics service that produces risk alerts and publishes them into the swarm.",
 )
 
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=False,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
+configure_cors(app)
 
 AUTHORITY_URL = os.getenv("PRED_AUTHORITY_URL", "http://authority-chain:1317")
 SWARM_PRED_URL = os.getenv("PRED_SWARM_PUBLISH_URL", "https://swarm-node-1:8443/ingest-prediction")
-SWARM_TOKEN = os.getenv("PRED_SWARM_API_KEY", "predictive-service")
+SWARM_TOKEN = os.getenv("PRED_SWARM_API_KEY", "").strip()
 CA_CERT = os.getenv("PRED_CA_CERT", "/certs/ca.crt")
 CLIENT_CERT = os.getenv("PRED_CLIENT_CERT", "/certs/edge-planet.crt")
 CLIENT_KEY = os.getenv("PRED_CLIENT_KEY", "/certs/edge-planet.key")
@@ -76,7 +75,7 @@ class PredictionStatus(BaseModel):
 def _extract_features(event: dict[str, Any], weather: dict[str, Any]) -> list[float]:
     confidence = float(event.get("event", {}).get("confidence", 0.5))
     event_type = event.get("event", {}).get("event_type", "unknown")
-    event_score = float(abs(hash(event_type)) % 100) / 100.0
+    event_score = int(hashlib.sha256(str(event_type).encode("utf-8")).hexdigest()[:8], 16) / 0xFFFFFFFF
     temp_c = float(weather.get("main", {}).get("temp", 295.0)) - 273.15
     humidity = float(weather.get("main", {}).get("humidity", 50.0)) / 100.0
     hour = datetime.now(timezone.utc).hour / 23.0
@@ -139,7 +138,23 @@ def _fit_model(events: list[dict[str, Any]]) -> tuple[np.ndarray, np.ndarray]:
     return x, y
 
 
+def _prediction_signature(pred: dict[str, Any]) -> str:
+    canonical = "\n".join(
+        [
+            str(pred.get("device_id", "")),
+            str(pred.get("event_type", "")),
+            f"{float(pred.get('confidence', 0.0)):.6f}",
+            str(pred.get("location", "")),
+            str(pred.get("frame_hash", "")),
+        ]
+    )
+    return hmac.new(
+        SWARM_TOKEN.encode("utf-8"), canonical.encode("utf-8"), hashlib.sha256
+    ).hexdigest()
+
+
 def _publish_prediction(pred: dict[str, Any]) -> None:
+    pred["signature"] = _prediction_signature(pred)
     payload = {
         "api_key": SWARM_TOKEN,
         "prediction": pred,
@@ -188,7 +203,7 @@ def _make_prediction_events(events: list[dict[str, Any]]) -> list[dict[str, Any]
                 "confidence": max(min(risk, 0.999), 0.0),
                 "location": zone,
                 "frame_hash": hashlib.sha256(seed.encode("utf-8")).hexdigest(),
-                "signature": hashlib.sha256(f"pred|{seed}".encode("utf-8")).hexdigest(),
+                "signature": "",
                 "risk_level": risk_level,
                 "meta": {
                     "zone_event_count": len(zone_events),
@@ -232,6 +247,8 @@ def _loop() -> None:
 @app.on_event("startup")
 def startup() -> None:
     global _loop_thread
+    required_secret("INTERNAL_API_KEY")
+    required_secret("PRED_SWARM_API_KEY", minimum_length=24)
     if _loop_thread and _loop_thread.is_alive():
         return
     _loop_stop.clear()
@@ -292,4 +309,4 @@ def run_once(_: dict = Depends(require_request_context)) -> dict[str, Any]:
 @app.get("/metrics")
 def metrics():
     model_ready_gauge.set(1 if model_ready else 0)
-    return generate_latest()
+    return prometheus_response(generate_latest())

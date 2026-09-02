@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"crypto/ed25519"
+	"crypto/hmac"
 	"crypto/sha256"
 	"crypto/tls"
 	"crypto/x509"
@@ -78,6 +79,10 @@ func init() {
 type Config struct {
 	NodeName            string
 	IdentitySeed        string
+	AuthServiceURL      string
+	InternalAPIKey      string
+	RequireEventSignature bool
+	EnforceDeviceBinding bool
 	ListenPort          int
 	IngressAddr         string
 	HealthAddr          string
@@ -119,10 +124,18 @@ type PredictionIngressRequest struct {
 
 type SwarmEnvelope struct {
 	EnvelopeID   string       `json:"envelope_id"`
-	APIKey       string       `json:"api_key"`
+	APIKey       string       `json:"-"`
+	OrgID        string       `json:"org_id"`
+	KeyID        string       `json:"key_id,omitempty"`
 	Event        EventPayload `json:"event"`
 	OriginPeerID string       `json:"origin_peer_id"`
 	CreatedAt    time.Time    `json:"created_at"`
+}
+
+type resolvedAPIKey struct {
+	OrgID    string `json:"org_id"`
+	DeviceID string `json:"device_id"`
+	KeyID    string `json:"key_id"`
 }
 
 type App struct {
@@ -172,7 +185,11 @@ func loadConfig() (Config, error) {
 
 	cfg := Config{
 		NodeName:           envOrDefault("SWARM_NODE_NAME", "swarm-node"),
-		IdentitySeed:       envOrDefault("SWARM_IDENTITY_SEED", "swarm-node-seed"),
+		IdentitySeed:       strings.TrimSpace(os.Getenv("SWARM_IDENTITY_SEED")),
+		AuthServiceURL:     envOrDefault("AUTH_SERVICE_URL", "http://auth-service:8700"),
+		InternalAPIKey:     strings.TrimSpace(os.Getenv("INTERNAL_API_KEY")),
+		RequireEventSignature: envBool("SWARM_REQUIRE_EVENT_SIGNATURE", true),
+		EnforceDeviceBinding: envBool("SWARM_ENFORCE_DEVICE_BINDING", true),
 		ListenPort:         listenPort,
 		IngressAddr:        envOrDefault("SWARM_INGRESS_ADDR", ":8443"),
 		HealthAddr:         envOrDefault("SWARM_HEALTH_ADDR", ":8081"),
@@ -193,14 +210,23 @@ func loadConfig() (Config, error) {
 		RedispatchTimeout:  parseDurationEnv("SWARM_REDISPATCH_TIMEOUT", 2*time.Minute),
 	}
 
+	if len(cfg.IdentitySeed) < 32 {
+		return Config{}, errors.New("SWARM_IDENTITY_SEED must be at least 32 characters")
+	}
+	if len(cfg.InternalAPIKey) < 32 || strings.Contains(strings.ToLower(cfg.InternalAPIKey), "change-me") {
+		return Config{}, errors.New("INTERNAL_API_KEY must be a non-placeholder value of at least 32 characters")
+	}
+	if cfg.AuthServiceURL == "" {
+		return Config{}, errors.New("AUTH_SERVICE_URL is required")
+	}
 	if cfg.ForwardMode == "backend-http" && cfg.BackendURL == "" {
 		return Config{}, errors.New("BACKEND_EVENTS_URL is required for backend-http mode")
 	}
 	if (cfg.ForwardMode == "validator-rest" || cfg.ForwardMode == "validator-http" || cfg.ForwardMode == "http") && cfg.ValidatorSubmitURL == "" {
 		return Config{}, errors.New("VALIDATOR_SUBMIT_URL is required for validator-rest mode")
 	}
-	if cfg.ForwardMode == "validator-grpc" && cfg.ValidatorGRPCAddr == "" {
-		return Config{}, errors.New("VALIDATOR_GRPC_ADDR is required for validator-grpc mode")
+	if cfg.ForwardMode == "validator-grpc" {
+		return Config{}, errors.New("validator-grpc mode is disabled until transport TLS is configured; use validator-http")
 	}
 
 	return cfg, nil
@@ -393,14 +419,9 @@ func (a *App) subscriptionLoop(ctx context.Context, sub *pubsub.Subscription, to
 			continue
 		}
 
-		// To avoid duplicate backend writes across the mesh, only the origin node forwards.
-		if envelope.OriginPeerID != a.host.ID().String() {
-			continue
-		}
-
-		if err := a.forwardToAuthority(ctx, envelope); err != nil {
-			log.Printf("forward error topic=%s envelope_id=%s err=%v", topicType, envelope.EnvelopeID, err)
-		}
+		// The origin node forwards synchronously before publishing. Peers consume
+		// the sanitized envelope for mesh visibility without duplicating writes.
+		continue
 	}
 }
 
@@ -417,13 +438,22 @@ func (a *App) runHTTPServers(ctx context.Context) error {
 	}
 
 	ingressSrv := &http.Server{
-		Addr:      a.cfg.IngressAddr,
-		Handler:   handler,
-		TLSConfig: tlsCfg,
+		Addr:              a.cfg.IngressAddr,
+		Handler:           handler,
+		TLSConfig:         tlsCfg,
+		ReadHeaderTimeout: 5 * time.Second,
+		ReadTimeout:       15 * time.Second,
+		WriteTimeout:      15 * time.Second,
+		IdleTimeout:       60 * time.Second,
+		MaxHeaderBytes:    16 << 10,
 	}
 
 	healthSrv := &http.Server{
-		Addr: a.cfg.HealthAddr,
+		Addr:              a.cfg.HealthAddr,
+		ReadHeaderTimeout: 3 * time.Second,
+		ReadTimeout:       5 * time.Second,
+		WriteTimeout:      5 * time.Second,
+		IdleTimeout:       30 * time.Second,
 		Handler: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			if r.URL.Path != "/healthz" {
 				http.NotFound(w, r)
@@ -483,14 +513,12 @@ func (a *App) handleIngest(w http.ResponseWriter, r *http.Request) {
 	}
 
 	defer r.Body.Close()
-	body, err := io.ReadAll(io.LimitReader(r.Body, 1<<20))
-	if err != nil {
-		http.Error(w, "failed to read body", http.StatusBadRequest)
-		return
-	}
+	r.Body = http.MaxBytesReader(w, r.Body, 1<<20)
 
 	var req IngressRequest
-	if err := json.Unmarshal(body, &req); err != nil {
+	decoder := json.NewDecoder(r.Body)
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(&req); err != nil {
 		http.Error(w, "invalid json", http.StatusBadRequest)
 		return
 	}
@@ -500,12 +528,34 @@ func (a *App) handleIngest(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	resolved, err := a.resolveAPIKey(r.Context(), req.APIKey)
+	if err != nil {
+		http.Error(w, "invalid API key", http.StatusUnauthorized)
+		return
+	}
+	if a.cfg.EnforceDeviceBinding && resolved.DeviceID != "" && resolved.DeviceID != req.Event.DeviceID {
+		http.Error(w, "API key is not authorized for this device", http.StatusForbidden)
+		return
+	}
+	if a.cfg.RequireEventSignature && !verifyEventSignature(req.APIKey, req.Event) {
+		http.Error(w, "invalid event signature", http.StatusUnauthorized)
+		return
+	}
+
 	envelope := SwarmEnvelope{
 		EnvelopeID:   randomEnvelopeID(req),
 		APIKey:       req.APIKey,
+		OrgID:        resolved.OrgID,
+		KeyID:        resolved.KeyID,
 		Event:        req.Event,
 		OriginPeerID: a.host.ID().String(),
 		CreatedAt:    time.Now().UTC(),
+	}
+
+	if err := a.forwardToAuthority(r.Context(), envelope); err != nil {
+		log.Printf("forward error envelope_id=%s err=%v", envelope.EnvelopeID, err)
+		http.Error(w, "authority unavailable", http.StatusBadGateway)
+		return
 	}
 
 	data, err := json.Marshal(envelope)
@@ -535,14 +585,12 @@ func (a *App) handleIngestPrediction(w http.ResponseWriter, r *http.Request) {
 	}
 
 	defer r.Body.Close()
-	body, err := io.ReadAll(io.LimitReader(r.Body, 1<<20))
-	if err != nil {
-		http.Error(w, "failed to read body", http.StatusBadRequest)
-		return
-	}
+	r.Body = http.MaxBytesReader(w, r.Body, 1<<20)
 
 	var req PredictionIngressRequest
-	if err := json.Unmarshal(body, &req); err != nil {
+	decoder := json.NewDecoder(r.Body)
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(&req); err != nil {
 		http.Error(w, "invalid json", http.StatusBadRequest)
 		return
 	}
@@ -553,12 +601,34 @@ func (a *App) handleIngestPrediction(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	resolved, err := a.resolveAPIKey(r.Context(), req.APIKey)
+	if err != nil {
+		http.Error(w, "invalid API key", http.StatusUnauthorized)
+		return
+	}
+	if a.cfg.EnforceDeviceBinding && resolved.DeviceID != "" && resolved.DeviceID != pred.DeviceID {
+		http.Error(w, "API key is not authorized for this device", http.StatusForbidden)
+		return
+	}
+	if a.cfg.RequireEventSignature && !verifyEventSignature(req.APIKey, pred) {
+		http.Error(w, "invalid event signature", http.StatusUnauthorized)
+		return
+	}
+
 	envelope := SwarmEnvelope{
 		EnvelopeID:   randomPredictionEnvelopeID(req),
 		APIKey:       req.APIKey,
+		OrgID:        resolved.OrgID,
+		KeyID:        resolved.KeyID,
 		Event:        pred,
 		OriginPeerID: a.host.ID().String(),
 		CreatedAt:    time.Now().UTC(),
+	}
+
+	if err := a.forwardToAuthority(r.Context(), envelope); err != nil {
+		log.Printf("prediction forward error envelope_id=%s err=%v", envelope.EnvelopeID, err)
+		http.Error(w, "authority unavailable", http.StatusBadGateway)
+		return
 	}
 
 	data, err := json.Marshal(envelope)
@@ -578,6 +648,66 @@ func (a *App) handleIngestPrediction(w http.ResponseWriter, r *http.Request) {
 		"envelope_id": envelope.EnvelopeID,
 		"origin_peer": envelope.OriginPeerID,
 	})
+}
+
+func canonicalEvent(event EventPayload) string {
+	return strings.Join(
+		[]string{
+			event.DeviceID,
+			event.EventType,
+			fmt.Sprintf("%.6f", event.Confidence),
+			event.Location,
+			event.FrameHash,
+		},
+		"\n",
+	)
+}
+
+func verifyEventSignature(apiKey string, event EventPayload) bool {
+	signature, err := hex.DecodeString(strings.TrimSpace(event.Signature))
+	if err != nil || len(signature) != sha256.Size {
+		return false
+	}
+	mac := hmac.New(sha256.New, []byte(apiKey))
+	_, _ = mac.Write([]byte(canonicalEvent(event)))
+	return hmac.Equal(signature, mac.Sum(nil))
+}
+
+func (a *App) resolveAPIKey(ctx context.Context, apiKey string) (resolvedAPIKey, error) {
+	body, err := json.Marshal(map[string]string{"api_key": apiKey})
+	if err != nil {
+		return resolvedAPIKey{}, err
+	}
+	req, err := http.NewRequestWithContext(
+		ctx,
+		http.MethodPost,
+		strings.TrimRight(a.cfg.AuthServiceURL, "/")+"/internal/api-keys/resolve",
+		bytes.NewReader(body),
+	)
+	if err != nil {
+		return resolvedAPIKey{}, err
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-Internal-Auth", a.cfg.InternalAPIKey)
+
+	resp, err := a.httpClient.Do(req)
+	if err != nil {
+		return resolvedAPIKey{}, fmt.Errorf("auth service unavailable: %w", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return resolvedAPIKey{}, fmt.Errorf("auth service rejected key with status %d", resp.StatusCode)
+	}
+
+	var resolved resolvedAPIKey
+	decoder := json.NewDecoder(io.LimitReader(resp.Body, 8<<10))
+	if err := decoder.Decode(&resolved); err != nil {
+		return resolvedAPIKey{}, fmt.Errorf("invalid auth response: %w", err)
+	}
+	if strings.TrimSpace(resolved.OrgID) == "" || strings.TrimSpace(resolved.KeyID) == "" {
+		return resolvedAPIKey{}, errors.New("auth response is missing key context")
+	}
+	return resolved, nil
 }
 
 func validateIngress(req IngressRequest) error {
@@ -726,7 +856,8 @@ func (a *App) forwardToBackend(ctx context.Context, env SwarmEnvelope) error {
 func (a *App) forwardToValidatorREST(ctx context.Context, env SwarmEnvelope) error {
 	payload := map[string]any{
 		"creator":        a.cfg.CreatorAddress,
-		"api_key":        env.APIKey,
+		"org_id":         env.OrgID,
+		"key_id":         env.KeyID,
 		"device_id":      env.Event.DeviceID,
 		"event_type":     env.Event.EventType,
 		"confidence":     uint64(env.Event.Confidence * 100),
@@ -748,9 +879,7 @@ func (a *App) forwardToValidatorREST(ctx context.Context, env SwarmEnvelope) err
 		return fmt.Errorf("create validator request: %w", err)
 	}
 	req.Header.Set("Content-Type", "application/json")
-	if internalKey := os.Getenv("INTERNAL_API_KEY"); internalKey != "" {
-		req.Header.Set("X-Internal-Auth", internalKey)
-	}
+	req.Header.Set("X-Internal-Auth", a.cfg.InternalAPIKey)
 
 	resp, err := a.httpClient.Do(req)
 	if err != nil {
@@ -769,6 +898,7 @@ func (a *App) forwardToValidatorREST(ctx context.Context, env SwarmEnvelope) err
 
 type validatorSubmitRequest struct {
 	Creator      string       `json:"creator"`
+	OrgID        string       `json:"org_id"`
 	DeviceID     string       `json:"device_id"`
 	EventType    string       `json:"event_type"`
 	Confidence   uint64       `json:"confidence"`
@@ -819,6 +949,7 @@ func (a *App) forwardToValidatorGRPC(ctx context.Context, env SwarmEnvelope) err
 
 	request := validatorSubmitRequest{
 		Creator:      a.cfg.CreatorAddress,
+		OrgID:        env.OrgID,
 		DeviceID:     env.Event.DeviceID,
 		EventType:    env.Event.EventType,
 		Confidence:   uint64(env.Event.Confidence * 100),
@@ -970,6 +1101,22 @@ func splitCSV(value string) []string {
 		}
 	}
 	return out
+}
+
+func envBool(key string, fallback bool) bool {
+	value := strings.TrimSpace(strings.ToLower(os.Getenv(key)))
+	if value == "" {
+		return fallback
+	}
+	switch value {
+	case "1", "true", "yes":
+		return true
+	case "0", "false", "no":
+		return false
+	default:
+		log.Printf("invalid boolean for %s=%q, using %t", key, value, fallback)
+		return fallback
+	}
 }
 
 func parseIntEnv(key string, fallback int) (int, error) {
