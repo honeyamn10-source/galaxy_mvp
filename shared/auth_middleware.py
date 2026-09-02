@@ -1,74 +1,33 @@
-import os
+"""Backward-compatible imports for services using the original module name."""
 
-import jwt
-from fastapi import Depends, Header, HTTPException
-from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
+from shared.security import (  # noqa: F401
+    ALGORITHM,
+    configure_cors,
+    cors_origins,
+    decode_access_token,
+    get_org_id,
+    prometheus_response,
+    require_access_token,
+    require_internal_auth,
+    require_request_context,
+    require_role,
+    require_user_context,
+    required_secret,
+    validate_required_secrets,
+)
 
-ALGORITHM = "HS256"
-_security = HTTPBearer(auto_error=False)
-
-
-def _jwt_secret() -> str:
-    secret = os.getenv("JWT_SECRET", "CHANGE_ME_generate_with_openssl_rand_hex_32")
-    if not secret:
-        raise HTTPException(status_code=500, detail="JWT secret is not configured")
-    return secret
-
-
-def _internal_key() -> str:
-    return os.getenv("INTERNAL_API_KEY", "CHANGE_ME_internal_service_key")
-
-
-def decode_access_token(token: str) -> dict:
-    try:
-        payload = jwt.decode(token, _jwt_secret(), algorithms=[ALGORITHM])
-    except jwt.ExpiredSignatureError as exc:
-        raise HTTPException(status_code=401, detail="Token expired") from exc
-    except jwt.InvalidTokenError as exc:
-        raise HTTPException(status_code=401, detail="Invalid token") from exc
-
-    if payload.get("type") != "access":
-        raise HTTPException(status_code=401, detail="Access token required")
-
-    return payload
-
-
-def require_access_token(creds: HTTPAuthorizationCredentials = Depends(_security)) -> dict:
-    if not creds:
-        raise HTTPException(status_code=401, detail="Authorization header required")
-    return decode_access_token(creds.credentials)
-
-
-def require_internal_auth(internal_key: str | None = None) -> dict:
-    if internal_key != _internal_key():
-        raise HTTPException(status_code=401, detail="Internal authentication required")
-    return {"sub": "internal", "org_id": "internal", "role": "internal", "internal": True}
-
-
-def require_request_context(
-    creds: HTTPAuthorizationCredentials = Depends(_security),
-    x_internal_auth: str | None = Header(default=None, alias="X-Internal-Auth"),
-) -> dict:
-    if x_internal_auth:
-        return require_internal_auth(x_internal_auth)
-    if creds:
-        payload = decode_access_token(creds.credentials)
-        payload["internal"] = False
-        return payload
-    raise HTTPException(status_code=401, detail="Authorization header required")
-
-
-def get_org_id(payload: dict = Depends(require_access_token)) -> str:
-    org_id = payload.get("org_id")
-    if not org_id:
-        raise HTTPException(status_code=401, detail="org_id missing from token")
-    return org_id
-
-
-def require_role(*roles: str):
-    def checker(payload: dict = Depends(require_access_token)):
-        if payload.get("role") not in roles:
-            raise HTTPException(status_code=403, detail=f"Required role: {list(roles)}")
-        return payload
-
-    return checker
+__all__ = [
+    "ALGORITHM",
+    "configure_cors",
+    "cors_origins",
+    "decode_access_token",
+    "get_org_id",
+    "prometheus_response",
+    "require_access_token",
+    "require_internal_auth",
+    "require_request_context",
+    "require_role",
+    "require_user_context",
+    "required_secret",
+    "validate_required_secrets",
+]
