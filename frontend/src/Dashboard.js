@@ -198,8 +198,10 @@ export default function Dashboard({ user, onLogout }) {
   useEffect(() => {
     try {
       const token = sessionStorage.getItem('access_token') || '';
-      const url = token ? `${WS_URL}${WS_URL.includes('?') ? '&' : '?'}token=${encodeURIComponent(token)}` : WS_URL;
-      const ws = new WebSocket(url);
+      if (!token) {
+        throw new Error('WebSocket access token is unavailable');
+      }
+      const ws = new WebSocket(WS_URL, [`galaxy.jwt.${token}`]);
       wsRef.current = ws;
 
       ws.onopen = () => {

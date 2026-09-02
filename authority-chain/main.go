@@ -1,24 +1,26 @@
 package main
 
 import (
+	"bufio"
 	"bytes"
 	"crypto/hmac"
 	"crypto/sha256"
 	"encoding/base64"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
 	"log"
-	"net"
 	"net/http"
 	"os"
+	"path/filepath"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
 
 	"github.com/gorilla/websocket"
-	"google.golang.org/grpc"
 )
 
 type Event struct {
@@ -37,6 +39,8 @@ type Event struct {
 	Signature    string  `json:"signature,omitempty"`
 	Status       string  `json:"status"`
 	Timestamp    int64   `json:"timestamp"`
+	PreviousHash string  `json:"previous_hash,omitempty"`
+	RecordHash   string  `json:"record_hash"`
 }
 
 type requestContext struct {
@@ -58,13 +62,13 @@ type nestedSubmission struct {
 	Submitter    string      `json:"submitter"`
 	EnvelopeID   string      `json:"envelope_id"`
 	OriginPeerID string      `json:"origin_peer_id"`
-	APIKey       string      `json:"api_key"`
+	OrgID        string      `json:"org_id"`
 	Event        nestedEvent `json:"event"`
 }
 
 type simpleSubmission struct {
 	Creator      string  `json:"creator"`
-	APIKey       string  `json:"api_key"`
+	OrgID        string  `json:"org_id"`
 	DeviceID     string  `json:"device_id"`
 	EventType    string  `json:"event_type"`
 	Confidence   float64 `json:"confidence"`
@@ -79,21 +83,32 @@ type simpleSubmission struct {
 
 var (
 	events      = make(map[string]Event)
+	eventOrder  = make([]string, 0)
 	eventsLock  sync.RWMutex
-	wsUpgrader  = websocket.Upgrader{CheckOrigin: func(r *http.Request) bool { return true }}
+	lastRecordHash string
+	wsUpgrader  = websocket.Upgrader{CheckOrigin: allowedWebSocketOrigin}
 	wsClients   = make(map[*websocket.Conn]string)
 	wsClientsMu sync.Mutex
 
-	jwtSecret      = envOrDefault("JWT_SECRET", "CHANGE_ME_generate_with_openssl_rand_hex_32")
-	internalAPIKey = os.Getenv("INTERNAL_API_KEY")
-	authServiceURL = envOrDefault("AUTH_SERVICE_URL", "http://auth-service:8700")
-	llmServiceURL  = envOrDefault("LLM_SERVICE_URL", "http://llm-service:8600")
-	llmTimeout     = timeoutFromEnv("LLM_TIMEOUT", 2*time.Second)
-	allowPublicRead = strings.EqualFold(envOrDefault("AUTHORITY_ALLOW_PUBLIC_READ", "true"), "true")
+	jwtSecret       = strings.TrimSpace(os.Getenv("JWT_SECRET"))
+	jwtIssuer       = envOrDefault("JWT_ISSUER", "galaxy-auth")
+	jwtAudience     = envOrDefault("JWT_AUDIENCE", "galaxy-api")
+	internalAPIKey  = strings.TrimSpace(os.Getenv("INTERNAL_API_KEY"))
+	llmServiceURL   = strings.TrimRight(envOrDefault("LLM_SERVICE_URL", "http://llm-service:8600"), "/")
+	llmTimeout      = timeoutFromEnv("LLM_TIMEOUT", 2*time.Second)
+	allowPublicRead = strings.EqualFold(envOrDefault("AUTHORITY_ALLOW_PUBLIC_READ", "false"), "true")
+	authorityAddr   = envOrDefault("CHAIN_REST_ADDR", "0.0.0.0:1317")
+	authorityDataDir = envOrDefault("CHAIN_DATA_DIR", "/data")
+	eventLogPath    = filepath.Join(authorityDataDir, "events.jsonl")
 )
 
 func main() {
-	go startGRPCServer()
+	if err := validateConfig(); err != nil {
+		log.Fatalf("configuration error: %v", err)
+	}
+	if err := loadEvents(); err != nil {
+		log.Fatalf("event ledger verification failed: %v", err)
+	}
 	startHTTPServer()
 }
 
@@ -122,16 +137,129 @@ func timeoutFromEnv(key string, fallback time.Duration) time.Duration {
 	return fallback
 }
 
-func startGRPCServer() {
-	lis, err := net.Listen("tcp", ":9090")
+func validateConfig() error {
+	for name, value := range map[string]string{
+		"JWT_SECRET":       jwtSecret,
+		"INTERNAL_API_KEY": internalAPIKey,
+	} {
+		lower := strings.ToLower(value)
+		if len(value) < 32 || strings.Contains(lower, "change-me") || strings.Contains(lower, "changeme") {
+			return fmt.Errorf("%s must be a non-placeholder value of at least 32 characters", name)
+		}
+	}
+	if authorityDataDir == "" {
+		return errors.New("CHAIN_DATA_DIR is required")
+	}
+	return nil
+}
+
+func allowedWebSocketOrigin(r *http.Request) bool {
+	origin := strings.TrimSpace(r.Header.Get("Origin"))
+	if origin == "" {
+		return !strings.EqualFold(envOrDefault("ENVIRONMENT", "production"), "production")
+	}
+	for _, allowed := range strings.Split(os.Getenv("AUTHORITY_WS_ALLOWED_ORIGINS"), ",") {
+		if strings.TrimRight(strings.TrimSpace(allowed), "/") == strings.TrimRight(origin, "/") {
+			return true
+		}
+	}
+	return false
+}
+
+func securityHeaders(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("X-Content-Type-Options", "nosniff")
+		w.Header().Set("X-Frame-Options", "DENY")
+		w.Header().Set("Cache-Control", "no-store")
+		next.ServeHTTP(w, r)
+	})
+}
+
+func recordHash(event Event) (string, error) {
+	copyEvent := event
+	copyEvent.RecordHash = ""
+	payload, err := json.Marshal(copyEvent)
 	if err != nil {
-		log.Fatalf("failed to listen: %v", err)
+		return "", err
 	}
-	s := grpc.NewServer()
-	log.Println("gRPC server listening on :9090")
-	if err := s.Serve(lis); err != nil {
-		log.Fatalf("failed to serve: %v", err)
+	sum := sha256.Sum256(payload)
+	return hex.EncodeToString(sum[:]), nil
+}
+
+func loadEvents() error {
+	if err := os.MkdirAll(authorityDataDir, 0o700); err != nil {
+		return err
 	}
+	file, err := os.Open(eventLogPath)
+	if errors.Is(err, os.ErrNotExist) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	defer file.Close()
+
+	scanner := bufio.NewScanner(file)
+	scanner.Buffer(make([]byte, 64<<10), 2<<20)
+	expectedPrevious := ""
+	lineNumber := 0
+	for scanner.Scan() {
+		lineNumber++
+		var event Event
+		if err := json.Unmarshal(scanner.Bytes(), &event); err != nil {
+			return fmt.Errorf("line %d: invalid JSON: %w", lineNumber, err)
+		}
+		if event.PreviousHash != expectedPrevious {
+			return fmt.Errorf("line %d: previous hash mismatch", lineNumber)
+		}
+		expectedHash, err := recordHash(event)
+		if err != nil {
+			return fmt.Errorf("line %d: hash error: %w", lineNumber, err)
+		}
+		if !hmac.Equal([]byte(event.RecordHash), []byte(expectedHash)) {
+			return fmt.Errorf("line %d: record hash mismatch", lineNumber)
+		}
+		if _, exists := events[event.ID]; exists {
+			return fmt.Errorf("line %d: duplicate event id", lineNumber)
+		}
+		events[event.ID] = event
+		eventOrder = append(eventOrder, event.ID)
+		expectedPrevious = event.RecordHash
+	}
+	if err := scanner.Err(); err != nil {
+		return err
+	}
+	lastRecordHash = expectedPrevious
+	log.Printf("verified authority ledger events=%d", len(eventOrder))
+	return nil
+}
+
+func persistEventLocked(event *Event) error {
+	event.PreviousHash = lastRecordHash
+	hash, err := recordHash(*event)
+	if err != nil {
+		return err
+	}
+	event.RecordHash = hash
+
+	file, err := os.OpenFile(eventLogPath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o600)
+	if err != nil {
+		return err
+	}
+	encoder := json.NewEncoder(file)
+	if err := encoder.Encode(event); err != nil {
+		_ = file.Close()
+		return err
+	}
+	if err := file.Sync(); err != nil {
+		_ = file.Close()
+		return err
+	}
+	if err := file.Close(); err != nil {
+		return err
+	}
+	lastRecordHash = event.RecordHash
+	return nil
 }
 
 func startHTTPServer() {
@@ -142,18 +270,35 @@ func startHTTPServer() {
 	mux.HandleFunc("/websocket", wsHandler)
 	mux.HandleFunc("/ws", wsHandler)
 
-	log.Println("HTTP server listening on :1317")
-	log.Fatal(http.ListenAndServe(":1317", mux))
+	server := &http.Server{
+		Addr:              authorityAddr,
+		Handler:           securityHeaders(mux),
+		ReadHeaderTimeout: 5 * time.Second,
+		ReadTimeout:       15 * time.Second,
+		WriteTimeout:      30 * time.Second,
+		IdleTimeout:       60 * time.Second,
+		MaxHeaderBytes:    16 << 10,
+	}
+	log.Printf("HTTP server listening on %s", authorityAddr)
+	log.Fatal(server.ListenAndServe())
 }
 
 func healthHandler(w http.ResponseWriter, _ *http.Request) {
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]string{"status": "ok"})
+	eventsLock.RLock()
+	count := len(eventOrder)
+	head := lastRecordHash
+	eventsLock.RUnlock()
+	writeJSON(w, http.StatusOK, map[string]any{
+		"status": "ok",
+		"service": "authority-ledger",
+		"events": count,
+		"ledger_head": head,
+	})
 }
 
 func requestContextFromHTTP(r *http.Request) (requestContext, error) {
 	if key := strings.TrimSpace(r.Header.Get("X-Internal-Auth")); key != "" {
-		if internalAPIKey != "" && key == internalAPIKey {
+		if len(internalAPIKey) >= 32 && hmac.Equal([]byte(key), []byte(internalAPIKey)) {
 			return requestContext{Internal: true, OrgID: "internal"}, nil
 		}
 		return requestContext{}, errors.New("invalid internal auth")
@@ -167,12 +312,17 @@ func requestContextFromHTTP(r *http.Request) (requestContext, error) {
 	return requestContextFromToken(strings.TrimSpace(strings.TrimPrefix(authHeader, "Bearer ")))
 }
 
-func requestContextFromWS(r *http.Request) (requestContext, error) {
-	token := strings.TrimSpace(r.URL.Query().Get("token"))
-	if token == "" {
-		return requestContext{}, errors.New("authorization required")
+func websocketToken(r *http.Request) (string, string, error) {
+	for _, item := range strings.Split(r.Header.Get("Sec-WebSocket-Protocol"), ",") {
+		protocol := strings.TrimSpace(item)
+		if strings.HasPrefix(protocol, "galaxy.jwt.") {
+			token := strings.TrimPrefix(protocol, "galaxy.jwt.")
+			if token != "" {
+				return token, protocol, nil
+			}
+		}
 	}
-	return requestContextFromToken(token)
+	return "", "", errors.New("websocket authentication protocol required")
 }
 
 func requestContextFromToken(token string) (requestContext, error) {
@@ -181,16 +331,23 @@ func requestContextFromToken(token string) (requestContext, error) {
 		return requestContext{}, errors.New("invalid token")
 	}
 
+	headerBytes, err := base64.RawURLEncoding.DecodeString(parts[0])
+	if err != nil {
+		return requestContext{}, errors.New("invalid token header")
+	}
+	var header map[string]any
+	if err := json.Unmarshal(headerBytes, &header); err != nil || header["alg"] != "HS256" {
+		return requestContext{}, errors.New("unsupported token algorithm")
+	}
+
 	signingInput := parts[0] + "." + parts[1]
 	providedSig, err := base64.RawURLEncoding.DecodeString(parts[2])
 	if err != nil {
 		return requestContext{}, errors.New("invalid token signature")
 	}
-
 	mac := hmac.New(sha256.New, []byte(jwtSecret))
-	mac.Write([]byte(signingInput))
-	expectedSig := mac.Sum(nil)
-	if !hmac.Equal(providedSig, expectedSig) {
+	_, _ = mac.Write([]byte(signingInput))
+	if !hmac.Equal(providedSig, mac.Sum(nil)) {
 		return requestContext{}, errors.New("invalid token signature")
 	}
 
@@ -198,32 +355,43 @@ func requestContextFromToken(token string) (requestContext, error) {
 	if err != nil {
 		return requestContext{}, errors.New("invalid token payload")
 	}
-
 	var claims map[string]any
 	if err := json.Unmarshal(payloadBytes, &claims); err != nil {
 		return requestContext{}, errors.New("invalid token payload")
 	}
 
-	if tokenType := fmt.Sprint(claims["type"]); tokenType != "access" {
+	if fmt.Sprint(claims["type"]) != "access" {
 		return requestContext{}, errors.New("access token required")
 	}
-
-	if expRaw, ok := claims["exp"]; ok {
-		exp, ok := toUnixSeconds(expRaw)
-		if !ok {
-			return requestContext{}, errors.New("invalid token expiry")
-		}
-		if time.Unix(exp, 0).Before(time.Now().UTC()) {
-			return requestContext{}, errors.New("token expired")
+	if fmt.Sprint(claims["iss"]) != jwtIssuer {
+		return requestContext{}, errors.New("invalid token issuer")
+	}
+	if fmt.Sprint(claims["aud"]) != jwtAudience {
+		return requestContext{}, errors.New("invalid token audience")
+	}
+	for _, claim := range []string{"sub", "org_id", "jti"} {
+		if strings.TrimSpace(fmt.Sprint(claims[claim])) == "" || fmt.Sprint(claims[claim]) == "<nil>" {
+			return requestContext{}, fmt.Errorf("%s missing from token", claim)
 		}
 	}
 
-	orgID := strings.TrimSpace(fmt.Sprint(claims["org_id"]))
-	if orgID == "" {
-		return requestContext{}, errors.New("org_id missing")
+	now := time.Now().UTC()
+	exp, ok := toUnixSeconds(claims["exp"])
+	if !ok || !time.Unix(exp, 0).After(now) {
+		return requestContext{}, errors.New("token expired")
+	}
+	iat, ok := toUnixSeconds(claims["iat"])
+	if !ok || time.Unix(iat, 0).After(now.Add(30*time.Second)) {
+		return requestContext{}, errors.New("invalid token issued-at")
+	}
+	if nbfRaw, exists := claims["nbf"]; exists {
+		nbf, valid := toUnixSeconds(nbfRaw)
+		if !valid || time.Unix(nbf, 0).After(now.Add(30*time.Second)) {
+			return requestContext{}, errors.New("token not active")
+		}
 	}
 
-	return requestContext{OrgID: orgID}, nil
+	return requestContext{OrgID: strings.TrimSpace(fmt.Sprint(claims["org_id"]))}, nil
 }
 
 func toUnixSeconds(value any) (int64, bool) {
@@ -244,108 +412,91 @@ func toUnixSeconds(value any) (int64, bool) {
 	}
 }
 
-func resolveOrgID(apiKey string) string {
-	apiKey = strings.TrimSpace(apiKey)
-	if apiKey == "" {
-		return "system"
-	}
-
-	reqBody, _ := json.Marshal(map[string]string{"api_key": apiKey})
-	req, err := http.NewRequest(http.MethodPost, authServiceURL+"/internal/api-keys/resolve", bytes.NewReader(reqBody))
-	if err != nil {
-		log.Printf("auth resolve request build failed: %v", err)
-		return "system"
-	}
-	req.Header.Set("Content-Type", "application/json")
-	if internalAPIKey != "" {
-		req.Header.Set("X-Internal-Auth", internalAPIKey)
-	}
-
-	client := &http.Client{Timeout: 2 * time.Second}
-	resp, err := client.Do(req)
-	if err != nil {
-		log.Printf("auth resolve request failed: %v", err)
-		return "system"
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(io.LimitReader(resp.Body, 256))
-		log.Printf("auth resolve status=%d body=%s", resp.StatusCode, strings.TrimSpace(string(body)))
-		return "system"
-	}
-
-	var parsed struct {
-		OrgID string `json:"org_id"`
-	}
-	if err := json.NewDecoder(resp.Body).Decode(&parsed); err != nil {
-		return "system"
-	}
-	if parsed.OrgID == "" {
-		return "system"
-	}
-	return parsed.OrgID
-}
-
-func parseSubmission(body []byte) (Event, string, error) {
+func parseSubmission(body []byte) (Event, error) {
 	var raw map[string]json.RawMessage
 	if err := json.Unmarshal(body, &raw); err != nil {
-		return Event{}, "", err
+		return Event{}, err
 	}
 
+	var event Event
 	if _, ok := raw["event"]; ok {
 		var submitted nestedSubmission
-		if err := json.Unmarshal(body, &submitted); err != nil {
-			return Event{}, "", err
+		decoder := json.NewDecoder(bytes.NewReader(body))
+		decoder.DisallowUnknownFields()
+		if err := decoder.Decode(&submitted); err != nil {
+			return Event{}, err
 		}
-		event := Event{
-			Submitter:    submitted.Submitter,
-			EnvelopeID:   submitted.EnvelopeID,
-			OriginPeerID: submitted.OriginPeerID,
-			DeviceID:     submitted.Event.DeviceID,
-			EventType:    submitted.Event.EventType,
+		event = Event{
+			OrgID:        strings.TrimSpace(submitted.OrgID),
+			Submitter:    strings.TrimSpace(submitted.Submitter),
+			EnvelopeID:   strings.TrimSpace(submitted.EnvelopeID),
+			OriginPeerID: strings.TrimSpace(submitted.OriginPeerID),
+			DeviceID:     strings.TrimSpace(submitted.Event.DeviceID),
+			EventType:    strings.TrimSpace(submitted.Event.EventType),
 			Confidence:   submitted.Event.Confidence,
-			Description:  submitted.Event.Description,
-			Location:     submitted.Event.Location,
-			FrameHash:    submitted.Event.FrameHash,
-			Signature:    submitted.Event.Signature,
+			Description:  strings.TrimSpace(submitted.Event.Description),
+			Location:     strings.TrimSpace(submitted.Event.Location),
+			FrameHash:    strings.TrimSpace(submitted.Event.FrameHash),
+			Signature:    strings.TrimSpace(submitted.Event.Signature),
 		}
-		return event, strings.TrimSpace(submitted.APIKey), nil
+	} else {
+		var submitted simpleSubmission
+		decoder := json.NewDecoder(bytes.NewReader(body))
+		decoder.DisallowUnknownFields()
+		if err := decoder.Decode(&submitted); err != nil {
+			return Event{}, err
+		}
+		confidence := submitted.Confidence
+		if submitted.ConfidenceF != 0 {
+			confidence = submitted.ConfidenceF
+		}
+		event = Event{
+			OrgID:        strings.TrimSpace(submitted.OrgID),
+			Submitter:    strings.TrimSpace(submitted.Creator),
+			EnvelopeID:   strings.TrimSpace(submitted.EnvelopeID),
+			OriginPeerID: strings.TrimSpace(submitted.OriginPeerID),
+			DeviceID:     strings.TrimSpace(submitted.DeviceID),
+			EventType:    strings.TrimSpace(submitted.EventType),
+			Confidence:   confidence,
+			Description:  strings.TrimSpace(submitted.Description),
+			Location:     strings.TrimSpace(submitted.Location),
+			FrameHash:    strings.TrimSpace(submitted.FrameHash),
+			Signature:    strings.TrimSpace(submitted.Signature),
+		}
 	}
 
-	var submitted simpleSubmission
-	if err := json.Unmarshal(body, &submitted); err != nil {
-		return Event{}, "", err
+	if err := validateEvent(event); err != nil {
+		return Event{}, err
 	}
-	deviceID := strings.TrimSpace(submitted.DeviceID)
-	if deviceID == "" {
-		return Event{}, "", errors.New("device_id is required")
-	}
-	eventType := strings.TrimSpace(submitted.EventType)
-	if eventType == "" {
-		return Event{}, "", errors.New("event_type is required")
-	}
-	confidence := submitted.Confidence
-	if confidence == 0 && submitted.ConfidenceF > 0 {
-		confidence = submitted.ConfidenceF
-	}
-	if confidence <= 0 {
-		return Event{}, "", errors.New("confidence is required")
-	}
+	return event, nil
+}
 
-	event := Event{
-		Submitter:    submitted.Creator,
-		EnvelopeID:   submitted.EnvelopeID,
-		OriginPeerID: submitted.OriginPeerID,
-		DeviceID:     deviceID,
-		EventType:    eventType,
-		Confidence:   confidence,
-		Description:  submitted.Description,
-		Location:     submitted.Location,
-		FrameHash:    submitted.FrameHash,
-		Signature:    submitted.Signature,
+func validateEvent(event Event) error {
+	if event.DeviceID == "" || len(event.DeviceID) > 255 {
+		return errors.New("device_id is required and must be at most 255 characters")
 	}
-	return event, strings.TrimSpace(submitted.APIKey), nil
+	if event.EventType == "" || len(event.EventType) > 100 {
+		return errors.New("event_type is required and must be at most 100 characters")
+	}
+	if event.Confidence < 0 || event.Confidence > 1 {
+		return errors.New("confidence must be between 0 and 1")
+	}
+	if len(event.Description) > 2000 || len(event.Location) > 255 {
+		return errors.New("event text fields are too long")
+	}
+	if event.FrameHash != "" {
+		decoded, err := hex.DecodeString(event.FrameHash)
+		if err != nil || len(decoded) != sha256.Size {
+			return errors.New("frame_hash must be a 32-byte hex value")
+		}
+	}
+	if event.Signature != "" {
+		decoded, err := hex.DecodeString(event.Signature)
+		if err != nil || len(decoded) != sha256.Size {
+			return errors.New("signature must be a 32-byte hex value")
+		}
+	}
+	return nil
 }
 
 func clampConfidence(v float64) float64 {
@@ -422,7 +573,7 @@ func eventsHandler(w http.ResponseWriter, r *http.Request) {
 	} else {
 		resolvedCtx, err := requestContextFromHTTP(r)
 		if err != nil {
-			http.Error(w, err.Error(), http.StatusUnauthorized)
+			http.Error(w, "unauthorized", http.StatusUnauthorized)
 			return
 		}
 		ctx = resolvedCtx
@@ -430,36 +581,59 @@ func eventsHandler(w http.ResponseWriter, r *http.Request) {
 
 	switch r.Method {
 	case http.MethodGet:
+		limit := 50
+		if raw := r.URL.Query().Get("limit"); raw != "" {
+			parsed, err := strconv.Atoi(raw)
+			if err != nil || parsed < 1 || parsed > 200 {
+				http.Error(w, "limit must be between 1 and 200", http.StatusBadRequest)
+				return
+			}
+			limit = parsed
+		}
+
 		eventsLock.RLock()
-		list := make([]Event, 0, len(events))
-		for _, ev := range events {
-			if ctx.Internal || ev.OrgID == ctx.OrgID {
-				list = append(list, ev)
+		list := make([]Event, 0, limit)
+		total := 0
+		for index := len(eventOrder) - 1; index >= 0; index-- {
+			event := events[eventOrder[index]]
+			if !ctx.Internal && event.OrgID != ctx.OrgID {
+				continue
+			}
+			total++
+			if len(list) < limit {
+				list = append(list, event)
 			}
 		}
 		eventsLock.RUnlock()
-		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(map[string]any{"events": list, "total": len(list)})
+		writeJSON(w, http.StatusOK, map[string]any{"events": list, "total": total})
+
 	case http.MethodPost:
-		body, err := io.ReadAll(io.LimitReader(r.Body, 1<<20))
+		if contentType := r.Header.Get("Content-Type"); !strings.HasPrefix(contentType, "application/json") {
+			http.Error(w, "Content-Type must be application/json", http.StatusUnsupportedMediaType)
+			return
+		}
+		r.Body = http.MaxBytesReader(w, r.Body, 1<<20)
+		body, err := io.ReadAll(r.Body)
 		if err != nil {
 			http.Error(w, "failed to read body", http.StatusBadRequest)
 			return
 		}
 
-		event, apiKey, err := parseSubmission(body)
+		event, err := parseSubmission(body)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
-
 		if ctx.Internal {
-			event.OrgID = resolveOrgID(apiKey)
+			if event.OrgID == "" {
+				http.Error(w, "org_id is required for internal submissions", http.StatusBadRequest)
+				return
+			}
 		} else {
 			event.OrgID = ctx.OrgID
 		}
-		if event.OrgID == "" {
-			http.Error(w, "org_id missing", http.StatusUnauthorized)
+		if len(event.OrgID) > 128 {
+			http.Error(w, "org_id is too long", http.StatusBadRequest)
 			return
 		}
 
@@ -469,67 +643,104 @@ func eventsHandler(w http.ResponseWriter, r *http.Request) {
 		}
 		event.Confidence = clampConfidence(event.Confidence + adjustment)
 		event.LLMReason = reason
-
-		if event.ID == "" {
-			if event.EnvelopeID != "" {
-				event.ID = event.EnvelopeID
-			} else {
-				event.ID = time.Now().UTC().Format(time.RFC3339Nano)
-			}
+		if event.EnvelopeID != "" {
+			event.ID = event.EnvelopeID
+		} else {
+			event.ID = time.Now().UTC().Format(time.RFC3339Nano)
 		}
 		event.Timestamp = time.Now().Unix()
-		if event.Status == "" {
-			event.Status = "pending"
-		}
+		event.Status = "pending"
 
 		eventsLock.Lock()
+		if existing, exists := events[event.ID]; exists {
+			eventsLock.Unlock()
+			if existing.OrgID != event.OrgID {
+				http.Error(w, "event id conflict", http.StatusConflict)
+				return
+			}
+			writeJSON(w, http.StatusOK, map[string]any{
+				"id": existing.ID,
+				"status": existing.Status,
+				"record_hash": existing.RecordHash,
+				"idempotent": true,
+			})
+			return
+		}
+		if err := persistEventLocked(&event); err != nil {
+			eventsLock.Unlock()
+			log.Printf("ledger append failed: %v", err)
+			http.Error(w, "ledger append failed", http.StatusInternalServerError)
+			return
+		}
 		events[event.ID] = event
+		eventOrder = append(eventOrder, event.ID)
 		eventsLock.Unlock()
 
 		broadcastEvent(event)
+		writeJSON(w, http.StatusCreated, eventToResponse(event))
 
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusCreated)
-		json.NewEncoder(w).Encode(event)
 	default:
+		w.Header().Set("Allow", "GET, POST")
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 	}
+}
+
+func eventToResponse(event Event) map[string]any {
+	payload, _ := json.Marshal(event)
+	var response map[string]any
+	_ = json.Unmarshal(payload, &response)
+	return response
 }
 
 func cosmosTxsHandler(w http.ResponseWriter, r *http.Request) {
 	ctx, err := requestContextFromHTTP(r)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusUnauthorized)
+		http.Error(w, "unauthorized", http.StatusUnauthorized)
+		return
+	}
+	if r.Method != http.MethodGet {
+		w.Header().Set("Allow", "GET")
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
 
 	eventsLock.RLock()
-	defer eventsLock.RUnlock()
-
-	rows := make([]Event, 0, len(events))
-	for _, ev := range events {
-		if ctx.Internal || ev.OrgID == ctx.OrgID {
-			rows = append(rows, ev)
+	rows := make([]Event, 0, len(eventOrder))
+	for index := len(eventOrder) - 1; index >= 0; index-- {
+		event := events[eventOrder[index]]
+		if ctx.Internal || event.OrgID == ctx.OrgID {
+			rows = append(rows, event)
 		}
 	}
-
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]any{"txs": rows})
+	eventsLock.RUnlock()
+	writeJSON(w, http.StatusOK, map[string]any{"txs": rows, "total": len(rows)})
 }
 
 func wsHandler(w http.ResponseWriter, r *http.Request) {
-	ctx, err := requestContextFromWS(r)
+	if r.Method != http.MethodGet {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	token, protocol, err := websocketToken(r)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusUnauthorized)
+		http.Error(w, "unauthorized", http.StatusUnauthorized)
+		return
+	}
+	ctx, err := requestContextFromToken(token)
+	if err != nil {
+		http.Error(w, "unauthorized", http.StatusUnauthorized)
 		return
 	}
 
-	conn, err := wsUpgrader.Upgrade(w, r, nil)
+	responseHeaders := http.Header{}
+	responseHeaders.Set("Sec-WebSocket-Protocol", protocol)
+	conn, err := wsUpgrader.Upgrade(w, r, responseHeaders)
 	if err != nil {
-		log.Println("WebSocket upgrade error:", err)
+		log.Printf("websocket upgrade error: %v", err)
 		return
 	}
 	defer conn.Close()
+	conn.SetReadLimit(64 << 10)
 
 	wsClientsMu.Lock()
 	wsClients[conn] = ctx.OrgID
@@ -585,5 +796,14 @@ func broadcastEvent(ev Event) {
 			conn.Close()
 			delete(wsClients, conn)
 		}
+	}
+}
+
+
+func writeJSON(w http.ResponseWriter, status int, payload any) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(status)
+	if err := json.NewEncoder(w).Encode(payload); err != nil {
+		log.Printf("response encoding failed: %v", err)
 	}
 }
