@@ -1,6 +1,7 @@
 import hashlib
+import hmac
 import os
-import random
+import secrets
 import smtplib
 import threading
 import uuid
@@ -20,21 +21,21 @@ from sqlalchemy.orm import Session, declarative_base, sessionmaker
 app = FastAPI(title="Galaxy Auth Service")
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=False,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_origins=[origin.strip() for origin in os.getenv("ALLOWED_ORIGINS", "http://localhost:8000").split(",") if origin.strip()],
+    allow_credentials=True,
+    allow_methods=["GET", "POST", "DELETE", "OPTIONS"],
+    allow_headers=["Authorization", "Content-Type", "X-Internal-Auth"],
 )
 
-SECRET_KEY = os.getenv("JWT_SECRET", "CHANGE_ME_generate_with_openssl_rand_hex_32")
-INTERNAL_API_KEY = os.getenv("INTERNAL_API_KEY", "CHANGE_ME_internal_service_key")
+SECRET_KEY = os.getenv("JWT_SECRET", "")
+INTERNAL_API_KEY = os.getenv("INTERNAL_API_KEY", "")
 DATABASE_URL = os.getenv("DATABASE_URL", "postgresql://postgres:postgres@postgres:5432/galaxy")
 ACCESS_EXP_MIN = int(os.getenv("ACCESS_EXP_MIN", "60"))
 REFRESH_EXP_DAYS = int(os.getenv("REFRESH_EXP_DAYS", "30"))
 DEFAULT_ADMIN_EMAIL = os.getenv("DEFAULT_ADMIN_EMAIL", "admin@test.com")
 DEFAULT_ADMIN_PASSWORD = os.getenv("DEFAULT_ADMIN_PASSWORD", "Test1234!")
 DEFAULT_ADMIN_ORG_NAME = os.getenv("DEFAULT_ADMIN_ORG_NAME", "Test Corp")
-DEFAULT_EDGE_API_KEY = os.getenv("DEFAULT_EDGE_API_KEY", "edge-planet-local")
+DEFAULT_EDGE_API_KEY = os.getenv("DEFAULT_EDGE_API_KEY", "")
 DEFAULT_EDGE_ORG_NAME = os.getenv("DEFAULT_EDGE_ORG_NAME", "Edge Demo")
 SMTP_HOST = os.getenv("SMTP_HOST", "")
 SMTP_PORT = int(os.getenv("SMTP_PORT", "587"))
@@ -95,7 +96,7 @@ Base.metadata.create_all(bind=engine)
 
 class RegisterReq(BaseModel):
     email: EmailStr
-    password: str = Field(min_length=8)
+    password: str = Field(min_length=12, max_length=128)
     org_name: str = Field(min_length=1)
 
 
@@ -192,7 +193,7 @@ def require_admin(payload: dict = Depends(require_auth)) -> dict:
 
 
 def require_internal_auth(x_internal_auth: str | None = Header(default=None, alias="X-Internal-Auth")) -> None:
-    if x_internal_auth != INTERNAL_API_KEY:
+    if not INTERNAL_API_KEY or not x_internal_auth or not hmac.compare_digest(x_internal_auth, INTERNAL_API_KEY):
         raise HTTPException(status_code=401, detail="Internal authentication required")
 
 
@@ -212,6 +213,9 @@ def _rate_limited(request: Request, bucket: str, limit: int, window_seconds: int
 
 
 def _seed_defaults(db: Session) -> None:
+    if not DEFAULT_EDGE_API_KEY:
+        return
+
     edge_org = db.query(Organization).filter(Organization.name == DEFAULT_EDGE_ORG_NAME).first()
     if not edge_org:
         edge_org = Organization(name=DEFAULT_EDGE_ORG_NAME, plan="free")
@@ -253,7 +257,11 @@ def _migrate_schema() -> None:
 
 
 def _generate_otp() -> str:
-    return f"{random.randint(0, 999999):06d}"
+    return f"{secrets.randbelow(1_000_000):06d}"
+
+
+def _otp_digest(email: str, otp: str) -> str:
+    return hmac.new(SECRET_KEY.encode(), f"{email.lower()}:{otp}".encode(), hashlib.sha256).hexdigest()
 
 
 def _send_otp_email(email: str, otp_code: str) -> bool:
@@ -281,6 +289,8 @@ def _send_otp_email(email: str, otp_code: str) -> bool:
 
 @app.on_event("startup")
 def startup() -> None:
+    if len(SECRET_KEY) < 32 or len(INTERNAL_API_KEY) < 32:
+        raise RuntimeError("JWT_SECRET and INTERNAL_API_KEY must each contain at least 32 characters")
     _migrate_schema()
     with SessionLocal() as db:
         _seed_defaults(db)
@@ -312,7 +322,7 @@ def register(req: RegisterReq, request: Request, db: Session = Depends(get_db)):
         role="admin",
         is_active=False,
         email_verified=False,
-        otp_code=otp_code,
+        otp_code=_otp_digest(str(req.email), otp_code),
         otp_expires_at=expires_at,
     )
     db.add(user)
@@ -359,7 +369,7 @@ def verify_otp(req: VerifyOtpReq, request: Request, db: Session = Depends(get_db
         raise HTTPException(status_code=400, detail="OTP not generated")
     if datetime.utcnow() > user.otp_expires_at:
         raise HTTPException(status_code=400, detail="OTP expired")
-    if req.otp.strip() != user.otp_code:
+    if not hmac.compare_digest(_otp_digest(str(req.email), req.otp.strip()), user.otp_code):
         raise HTTPException(status_code=401, detail="Invalid OTP")
 
     user.email_verified = True
@@ -388,15 +398,16 @@ def resend_otp(req: ResendOtpReq, request: Request, db: Session = Depends(get_db
     if user.email_verified:
         raise HTTPException(status_code=409, detail="Email already verified")
 
-    user.otp_code = _generate_otp()
+    otp_code = _generate_otp()
+    user.otp_code = _otp_digest(str(user.email), otp_code)
     user.otp_expires_at = datetime.utcnow() + timedelta(minutes=OTP_TTL_MINUTES)
     db.commit()
 
-    sent_via_smtp = _send_otp_email(user.email, user.otp_code)
+    sent_via_smtp = _send_otp_email(user.email, otp_code)
     return RegisterResponse(
         message="OTP sent to email",
         requires_otp=True,
-        dev_otp=user.otp_code if (not sent_via_smtp and ENVIRONMENT == "development") else None,
+        dev_otp=otp_code if (not sent_via_smtp and ENVIRONMENT == "development") else None,
     )
 
 

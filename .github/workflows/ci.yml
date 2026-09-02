@@ -1,194 +1,79 @@
-name: CI - Test, Lint, and Validate
+name: CI
 
 on:
   push:
-    branches: [ main, develop ]
+    branches: [main, develop]
   pull_request:
-    branches: [ main, develop ]
+    branches: [main, develop]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
-  python-lint:
-    name: Python Linting and Type Check
+  python:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      
-      - name: Set up Python
-        uses: actions/setup-python@v4
+      - uses: actions/setup-python@v5
         with:
-          python-version: '3.11'
-          cache: 'pip'
-      
-      - name: Install dependencies
+          python-version: "3.11"
+      - name: Compile all Python sources
+        run: python -m compileall -q auth-service backend edge-planet expansion-layer intelligence-layer llm-service shared
+      - name: Run repository tests
         run: |
           python -m pip install --upgrade pip
-          pip install flake8 pylint mypy
-      
-      - name: Lint with flake8
-        run: |
-          # Stop build on error
-          flake8 edge-planet backend intelligence-layer expansion-layer --count --select=E9,F63,F7,F82 --show-source --statistics
-          # Warnings only
-          flake8 edge-planet backend intelligence-layer expansion-layer --count --exit-zero --max-complexity=10 --max-line-length=127 --statistics
-      
-      - name: Type check with mypy
-        run: |
-          mypy edge-planet/*.py --ignore-missing-imports || true
-          mypy backend/*.py --ignore-missing-imports || true
-        continue-on-error: true
+          pip install pytest bcrypt PyJWT fastapi pydantic[email] sqlalchemy
+          pytest -q tests
 
-  python-tests:
-    name: Python Unit Tests
-    runs-on: ubuntu-latest
-    services:
-      postgres:
-        image: postgres:15-alpine
-        env:
-          POSTGRES_PASSWORD: postgres
-        options: >-
-          --health-cmd pg_isready
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
-        ports:
-          - 5432:5432
-      
-      redis:
-        image: redis:7-alpine
-        options: >-
-          --health-cmd "redis-cli ping"
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
-        ports:
-          - 6379:6379
-    
-    steps:
-      - uses: actions/checkout@v4
-      
-      - name: Set up Python
-        uses: actions/setup-python@v4
-        with:
-          python-version: '3.11'
-          cache: 'pip'
-      
-      - name: Install Python dependencies
-        run: |
-          python -m pip install --upgrade pip
-          pip install pytest pytest-asyncio pytest-cov
-          for dir in backend edge-planet intelligence-layer expansion-layer; do
-            if [ -f "$dir/requirements.txt" ]; then
-              pip install -r "$dir/requirements.txt" || true
-            fi
-          done
-      
-      - name: Run Python tests
-        env:
-          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/galaxy
-          REDIS_URL: redis://localhost:6379
-        run: |
-          pytest test-phase1.py -v || true
-        continue-on-error: true
-
-  go-lint:
-    name: Go Linting and Vet
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      
-      - name: Set up Go
-        uses: actions/setup-go@v4
-        with:
-          go-version: '1.22'
-          cache: 'go'
-      
-      - name: Run go vet
-        run: |
-          cd authority-chain && go vet ./...
-          cd ../swarm-node && go vet ./...
-        continue-on-error: true
-      
-      - name: Run golangci-lint
-        uses: golangci/golangci-lint-action@v3
-        with:
-          version: latest
-          working-directory: authority-chain
-        continue-on-error: true
-
-  go-tests:
-    name: Go Tests
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      
-      - name: Set up Go
-        uses: actions/setup-go@v4
-        with:
-          go-version: '1.22'
-          cache: 'go'
-      
-      - name: Download Go dependencies
-        run: |
-          cd authority-chain && go mod download && go mod verify
-          cd ../swarm-node && go mod download && go mod verify
-      
-      - name: Run Go tests
-        run: |
-          cd authority-chain && go test -v ./... || true
-          cd ../swarm-node && go test -v ./... || true
-        continue-on-error: true
-
-  docker-build:
-    name: Docker Build Validation
+  go:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        service: 
-          - edge-planet
-          - backend
-          - expansion-layer/webhook-service
-          - expansion-layer/compliance-engine
-          - intelligence-layer/fl-aggregator
-          - intelligence-layer/predictive-service
-    
+        module: [authority-chain, swarm-node]
+    defaults:
+      run:
+        working-directory: ${{ matrix.module }}
     steps:
       - uses: actions/checkout@v4
-      
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v2
-      
-      - name: Validate Dockerfile
-        run: |
-          docker buildx build --dry-run -f ${{ matrix.service }}/Dockerfile ${{ matrix.service }}
-        continue-on-error: true
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.22.x"
+          cache-dependency-path: ${{ matrix.module }}/go.sum
+      - run: go mod verify
+      - run: go vet ./...
+      - run: go test -race ./...
 
-  k8s-validation:
-    name: Kubernetes Manifest Validation
+  frontend:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - run: npm install --no-audit --no-fund
+      - run: npm run build
+        env:
+          CI: "true"
+
+  compose:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      
-      - name: Install kubeval
-        run: |
-          wget https://github.com/instrumenta/kubeval/releases/latest/download/kubeval-linux-amd64.tar.gz
-          tar xf kubeval-linux-amd64.tar.gz
-          sudo mv kubeval /usr/local/bin
-      
-      - name: Validate K8s manifests
-        run: |
-          kubeval k8s/*.yaml --ignore-missing-schemas || true
-          kubeval k8s/*/*.yaml --ignore-missing-schemas || true
-        continue-on-error: true
-
-  yarn-lock-check:
-    name: Yarn Lock Consistency (Dashboard)
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      
-      - name: Check frontend dependencies
-        run: |
-          if [ -f frontend/package.json ]; then
-            npm list --prefix frontend || true
-          fi
-        continue-on-error: true
+      - name: Validate Compose configuration
+        env:
+          POSTGRES_USER: galaxy
+          POSTGRES_PASSWORD: test-only-password
+          POSTGRES_DB: galaxy
+          JWT_SECRET: test-only-jwt-secret-with-at-least-32-characters
+          INTERNAL_API_KEY: test-only-internal-key-with-at-least-32-characters
+          EDGE_TENANT_API_KEY: test-only-edge-key-with-at-least-32-characters
+          COMPLIANCE_ENCRYPTION_KEY: test-only-compliance-key-with-32-chars
+        run: docker compose config --quiet
