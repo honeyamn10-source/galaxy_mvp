@@ -1,6 +1,8 @@
 # Enhanced Autonomous Cognitive Galaxy v2.0
 
-Production-ready, decentralized AI event detection platform that combines edge inference, secure swarm propagation, blockchain authority, federated intelligence, compliance automation, Kubernetes hardening, and optional local LLM augmentation.
+A decentralized AI event detection development platform that combines edge inference, secure swarm propagation, blockchain authority, federated intelligence, compliance automation, Kubernetes hardening, and optional local LLM augmentation.
+
+**Review status:** This is a development repository. Phase labels below describe the existing implementation notes, not a new production certification. The recent CodeQL workflow failed during checkout; it did not reach code analysis in that job. Validate deployment, security and integrations before release.
 
 ## What This Project Delivers
 
