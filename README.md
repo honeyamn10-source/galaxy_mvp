@@ -1,36 +1,42 @@
-# Enhanced Autonomous Cognitive Galaxy v2.0
+<h1 align="center">Galaxy</h1>
 
-A decentralized AI event detection development platform that combines edge inference, secure swarm propagation, blockchain authority, federated intelligence, compliance automation, Kubernetes hardening, and optional local LLM augmentation.
+<p align="center">
+  <b>Enhanced Autonomous Cognitive Galaxy</b>
+  <br />
+  <em>A decentralized AI event-detection platform — edge inference, secure swarm propagation, blockchain authority, and federated intelligence.</em>
+</p>
 
-**Review status:** This is a development repository. Phase labels below describe the existing implementation notes, not a new production certification. The recent CodeQL workflow failed during checkout; it did not reach code analysis in that job. Validate deployment, security and integrations before release.
+<p align="center">
+  <a href="https://github.com/honeyamn10-source/galaxy_mvp/blob/main/LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue.svg" alt="License: MIT"></a>
+  <a href="https://github.com/honeyamn10-source/galaxy_mvp/releases"><img src="https://img.shields.io/badge/version-2.0-blue.svg" alt="Version: 2.0"></a>
+  <a href="https://github.com/honeyamn10-source/galaxy_mvp"><img src="https://img.shields.io/badge/stage-development-important.svg" alt="Stage: Development"></a>
+  <a href="https://www.python.org/"><img src="https://img.shields.io/badge/python-3.11+-3776AB.svg" alt="Python 3.11+"></a>
+  <a href="https://www.docker.com/"><img src="https://img.shields.io/badge/docker-compose-2496ED.svg" alt="Docker Compose"></a>
+</p>
 
-## What This Project Delivers
+---
 
-- Edge AI event detection with multi-tenant ingestion
-- Secure peer-to-peer propagation over libp2p swarm with mTLS
-- Blockchain-backed verification and reward logic
-- Federated learning aggregation and predictive analytics
-- Expansion layer with compliance transformation and webhook delivery
-- Production hardening with Kubernetes, monitoring, backup/restore, and CI/CD
-- Optional local DeepSeek LLM integration (via Ollama) for nuanced verification and chat
+**Galaxy** is a decentralized AI event-detection platform built for environments that need edge inference at the source, tamper-evident event verification, and privacy-preserving learning — without handing data to a central party. Events are detected at the edge, propagated through an authenticated peer-to-peer swarm, verified by a blockchain-backed authority chain, and analyzed by a federated intelligence layer.
 
-## Phase Status
+> **Review status:** This is a development repository. Phase labels describe the existing implementation and notes, not a production certification. Validate deployment, security, and integrations before any release.
 
-| Phase | Name | Status | Core Outcome |
-|---|---|---|---|
-| I | Edge & Backend | Complete | FastAPI backend, dashboard, PostgreSQL, Redis, edge ingestion |
-| II | Swarm Mesh | Complete | libp2p event mesh with mTLS and validator forwarding |
-| III | Blockchain Authority | Complete | Cosmos-like authority node and event voting surfaces |
-| IV | Intelligence | Complete | FL aggregator and predictive risk service |
-| V | Expansion & Economy | Complete | Compliance engine, webhooks, CosmWasm contracts, Hermes profile |
-| VI | Production Hardening | Complete | Kubernetes manifests, monitoring stack, CI/CD, backups |
-| LLM | DeepSeek Integration | Complete | Ollama-backed analysis and chat endpoints |
+## 🚀 What Galaxy delivers
 
-## High-Level Architecture
+| Capability | Description |
+| --- | --- |
+| 🛰️ **Edge AI detection** | Multi-tenant event ingestion with YOLO/agent inference at the source |
+| 🔐 **Secure swarm mesh** | Peer-to-peer propagation over libp2p with mTLS and validator forwarding |
+| ⛓️ **Blockchain authority** | Cosmos-style authority node with event verification, voting, and reward logic |
+| 🧠 **Federated intelligence** | FL aggregation and a predictive risk analytics service |
+| 📋 **Expansion & economy** | Compliance transformation, webhooks, CosmWasm contracts, IBC relay profile |
+| 🛡️ **Hardened delivery** | Kubernetes manifests, monitoring, backup/restore, and CI/CD |
+| 🤖 **Optional local LLM** | DeepSeek augmentation (via Ollama) for nuanced verification and chat |
+
+## 🧭 Architecture
 
 ```mermaid
 flowchart LR
-  EP[Edge Planet]\nYOLO/Agent --> SN1[Swarm Node 1]
+  EP[Edge Planet │ YOLO/Agent] --> SN1[Swarm Node 1]
   SN1 --> SN2[Swarm Node 2]
   SN1 --> AC[Authority Chain Gateway]
   AC --> DB[(PostgreSQL)]
@@ -46,349 +52,86 @@ flowchart LR
   FE --> LLM
 ```
 
-## Layer Diagrams
+## 🗺️ System phases
 
-### Phase I: Edge and Backend
+| Phase | Name | Status | Core outcome |
+| --- | --- | --- | --- |
+| I | Edge & Backend | ✅ | FastAPI backend, dashboard, PostgreSQL, Redis, edge ingestion |
+| II | Swarm Mesh | ✅ | libp2p event mesh with mTLS and validator forwarding |
+| III | Blockchain Authority | ✅ | Cosmos-like authority node and event voting surfaces |
+| IV | Intelligence | ✅ | FL aggregator and predictive risk service |
+| V | Expansion & Economy | ✅ | Compliance engine, webhooks, CosmWasm contracts, Hermes profile |
+| VI | Production Hardening | ✅ | Kubernetes manifests, monitoring stack, CI/CD, backups |
+| LLM | DeepSeek Integration | ✅ | Ollama-backed analysis and chat endpoints |
 
-```mermaid
-flowchart LR
-  Camera[Camera/Jetson] --> Edge[Edge Planet Service]
-  Edge --> Backend[FastAPI Backend]
-  Backend --> Postgres[(PostgreSQL)]
-  Backend --> Redis[(Redis)]
-  Dashboard[React Dashboard] --> Backend
-```
+## ⚡ Quickstart (Docker Compose)
 
-### Phase II: Swarm Mesh
-
-```mermaid
-flowchart LR
-  EP[Edge Planet] --> SN1[Swarm Node 1]
-  SN1 <-- mTLS/GossipSub --> SN2[Swarm Node 2]
-  SN2 --> AC[Authority Chain Gateway]
-```
-
-### Phase III: Blockchain Authority
-
-```mermaid
-flowchart LR
-  SN[Swarm Nodes] --> GW[Authority Gateway REST/gRPC]
-  GW --> Store[(Authority Data)]
-  GW --> Tx[Cosmos-style Tx Surface]
-  Tx --> Vote[Verification / Voting]
-  Vote --> Reward[Token Reward Logic]
-```
-
-### Phase IV: Intelligence Layer
-
-```mermaid
-flowchart LR
-  EdgeClients[Edge FL Clients] --> FL[FL Aggregator]
-  FL --> Models[(Model Store)]
-  Authority[Authority Events] --> Pred[Predictive Service]
-  Pred --> Alerts[Risk Alerts]
-  Alerts --> Dashboard[Dashboard]
-```
-
-### Phase V: Expansion Layer
-
-```mermaid
-flowchart LR
-  Authority[Authority Events] --> Compliance[Compliance Engine]
-  Compliance --> Audit[(Audit Log)]
-  Compliance --> Webhook[Webhook Service]
-  Webhook --> Targets[External Endpoints]
-  Contracts[CosmWasm Contracts] --> Economy[Registry/Rewards/Staking]
-  Hermes[Hermes Profile] --> IBC[IBC Relay Path]
-```
-
-### Phase VI + LLM: Hardening and AI Verifier Augmentation
-
-```mermaid
-flowchart LR
-  K8s[Kubernetes Manifests] --> Deploy[Cluster Deployment]
-  Deploy --> Prom[Prometheus]
-  Deploy --> Graf[Grafana]
-  Deploy --> NetPol[Network Policies]
-  Deploy --> CI[GitHub Actions CI/CD]
-  Deploy --> Backup[Backup/Restore Scripts]
-  Authority[Authority Gateway] --> LLM[LLM Service]
-  LLM --> Ollama[Ollama DeepSeek 6.7B]
-  Dashboard[Dashboard Chat] --> LLM
-```
-
-## Repository Map
-
-- [docker-compose.yml](docker-compose.yml): Full local stack composition
-- [Makefile](Makefile): Operational shortcuts
-- [PHASE_I_SETUP.md](PHASE_I_SETUP.md): Phase I setup details
-- [PHASE_II_SETUP.md](PHASE_II_SETUP.md): Swarm setup details
-- [PHASE_III_SETUP.md](PHASE_III_SETUP.md): Authority-chain setup details
-- [PHASE_IV_SETUP.md](PHASE_IV_SETUP.md): Intelligence-layer setup details
-- [PHASE_V_SETUP.md](PHASE_V_SETUP.md): Expansion/economy setup details
-- [PHASE_VI_SETUP.md](PHASE_VI_SETUP.md): Kubernetes and production hardening
-- [docs/LLM_INTEGRATION.md](docs/LLM_INTEGRATION.md): LLM service integration details
-- [docs/LLM_QUICKSTART.md](docs/LLM_QUICKSTART.md): LLM quickstart guide
-- [k8s](k8s): Kubernetes deployment manifests
-- [scripts/backup.sh](scripts/backup.sh): Backup automation
-- [scripts/restore.sh](scripts/restore.sh): Restore flow
-
-## Quickstart (Local Docker Compose)
-
-### 1) Prerequisites
+### Prerequisites
 
 - Docker Engine + Docker Compose plugin
-- Make
-- Python 3.11+ (for optional tests)
-- jq (recommended for JSON inspection)
-- Optional LLM path: Ollama with DeepSeek model
+- GNU Make
+- Python 3.11+ (optional tests)
+- `jq` (recommended)
+- **Optional LLM path:** Ollama with a DeepSeek model
 
-### 2) Start Core Stack
+### Start the core stack
 
 ```bash
 make swarm-up
 ```
 
-Alternative:
+or equivalently:
 
 ```bash
 docker-compose up -d --build
 ```
 
-### 3) Check Service Health
+### Verify health
 
 ```bash
 make health
-curl -s http://localhost:8100/health
-curl -s http://localhost:8200/health
-curl -s http://localhost:8300/health
-curl -s http://localhost:8400/health
-curl -s http://localhost:8500/health
 ```
 
-### 4) Run Integration Test
+Each service exposes a health endpoint on its own port (`8100`–`8600`).
+
+### Run integration tests
 
 ```bash
 make test
 ```
 
-### 5) Run the Demo Stack
+### Run the demo stack
 
 ```bash
 ./demo.sh
 ```
 
-This starts the stack, opens the dashboard, and keeps a background event stream running so the UI stays alive during demos.
-
 Demo URLs:
 
-- Dashboard: http://localhost:8000
-- Landing page: http://localhost:8080
-- Authority health: http://localhost:1317/health
-- Authority events: http://localhost:1317/galaxy/v1/events
+| Service | URL |
+| --- | --- |
+| Dashboard | http://localhost:8000 |
+| Landing page | http://localhost:8080 |
+| Authority health | http://localhost:1317/health |
+| Authority events | http://localhost:1317/galaxy/v1/events |
 
-If you only need to verify health and restart unhealthy services, run:
+For a health-only pass with auto-restart of unhealthy services:
 
 ```bash
 ./preflight.sh
 ```
 
-### 5) Optional LLM Enablement
-
-Start Ollama and model:
-
-```bash
-make ollama-up
-```
-
-Start and test LLM service:
-
-```bash
-make llm-up
-make test-llm
-```
-
-## One-Click Installer
-
-Use the interactive installer to detect OS, validate ports, configure runtime values, pull GHCR images, and start the stack.
+### One-click interactive installer
 
 ```bash
 bash install-galaxy.sh
 ```
 
-Installer prompts:
+Prompts: Edge API key, optional RTSP URL, compliance region.
 
-- Edge API key
-- RTSP URL (optional)
-- Compliance region
+## ✅ Deploying to Kubernetes
 
-## Paperclip Governance Layer
-
-Paperclip can orchestrate Galaxy autonomous workflows as a control-plane "board of directors".
-
-### Local startup
-
-```bash
-npx -y paperclipai onboard --yes
-npx -y paperclipai run
-```
-
-Paperclip local UI/API:
-
-- UI: `http://localhost:3100` (or next free port selected by Paperclip)
-- API health: `http://127.0.0.1:3100/api/health` (use matching fallback port if 3100 is busy)
-
-### Workflow skills
-
-Skill definitions are provided in `.paperclip/skills/`:
-
-- `galaxy-autonomous-loop.yaml`
-- `galaxy-pages-deploy.yaml`
-- `galaxy-worker-deploy.yaml`
-
-Each skill dispatches the corresponding workflow through the GitHub Actions workflow dispatch API.
-
-### Token setup
-
-Set a GitHub PAT with `repo` and `workflow` scopes before running Paperclip-triggered actions:
-
-```bash
-export GITHUB_TOKEN=<your_pat>
-```
-
-Full setup guide: `PAPERCLIP_INTEGRATION.md`
-
-## Cloudflare Pages Zero-Touch CI/CD
-
-This repository now includes fully automated Cloudflare Pages deployment via GitHub Actions.
-
-Workflow file:
-
-- `.github/workflows/cloudflare-pages.yml`
-
-Auto-detection supports:
-
-- React
-- Vite
-- Next.js
-- Static HTML
-
-For this repository, static deployment target is `docs/landing`.
-
-### Initial one-time setup (required)
-
-Add these GitHub repository secrets:
-
-- `CLOUDFLARE_API_TOKEN`
-- `CLOUDFLARE_ACCOUNT_ID`
-- `CF_PAGES_PROJECT_NAME`
-
-After this one-time setup, every push to `main` deploys automatically and every pull request creates a preview deployment.
-
-### Build/output mapping
-
-- React/Vite: `npm run build` -> `dist` or `build` (auto-detected)
-- Next.js: `npm run build` -> `.next`
-- Static: no build -> `/` (deployed from detected static app directory)
-
-### Deployment behavior
-
-- Automatically installs missing dependencies when needed
-- Retries Cloudflare deployment up to 3 times
-- Validates output directory and falls back safely for static sites
-- Writes deployment URL in GitHub Actions step summary
-
-## Cloud Demo Deployment (Ubuntu 22.04)
-
-Use the demo deployment script on a fresh VM. It installs Docker, deploys the stack, and configures nginx basic auth.
-
-```bash
-sudo bash deploy-demo.sh
-```
-
-Environment overrides:
-
-```bash
-sudo DEMO_AUTH_USER=admin DEMO_AUTH_PASS='strong-password' bash deploy-demo.sh
-```
-
-## Desktop App (Tauri Skeleton)
-
-A desktop launcher skeleton is available in [galaxy-desktop](galaxy-desktop).
-
-```bash
-cd galaxy-desktop
-npm install
-npm run tauri dev
-```
-
-It provides:
-
-- Embedded dashboard webview
-- Tray actions to start/stop stack
-- Dashboard open action
-
-## Custom AI Models and Real Cameras
-
-Edge service supports mounted models and optional RTSP input configuration through env vars.
-
-- Model mount path: `./models` on host -> `/models` in container
-- Active model env: `MODEL_PATH`
-- Camera source env: `RTSP_URL`
-
-Create `.env` from [.env.example](.env.example) and set values:
-
-```bash
-cp .env.example .env
-```
-
-## Configuration Reference
-
-All runtime configuration is environment-driven. Main references are in [docker-compose.yml](docker-compose.yml) and [k8s/configmaps.yaml](k8s/configmaps.yaml).
-
-### Core Services
-
-| Service | Key Environment Variables |
-|---|---|
-| authority-chain | CHAIN_ID, CHAIN_VOTE_THRESHOLD, CHAIN_COMPLIANCE_URL, LLM_SERVICE_URL, LLM_TIMEOUT |
-| swarm-node | SWARM_NODE_NAME, SWARM_RENDEZVOUS, SWARM_BOOTSTRAP_SEEDS, VALIDATOR_GRPC_ADDR |
-| edge-planet | SWARM_INGEST_URL, FL_ENABLED, FL_AGGREGATOR_URL, FL_SYNC_INTERVAL_SECONDS |
-| fl-aggregator | FL_DATABASE_URL, FL_MODEL_DIR, FL_MIN_UPDATES_FOR_AGG |
-| predictive-service | PRED_AUTHORITY_URL, PRED_SWARM_PUBLISH_URL, PRED_RISK_THRESHOLD |
-| compliance-engine | COMPLIANCE_DEFAULT_REGION, COMPLIANCE_HIPAA_EVENT_TYPES, COMPLIANCE_PII_KEYS |
-| webhook-service | WEBHOOK_DATABASE_URL, WEBHOOK_AUTHORITY_EVENTS_URL, WEBHOOK_MAX_RETRIES |
-
-### LLM Service
-
-| Variable | Purpose | Default |
-|---|---|---|
-| OLLAMA_URL | Ollama API base URL | http://host.docker.internal:11434 |
-| OLLAMA_MODEL | Local model tag | deepseek-llm:6.7b |
-| OLLAMA_TIMEOUT | Ollama inference timeout seconds | 60 |
-| LLM_ENABLED | Enable/disable LLM service behavior | true |
-| LLM_SERVICE_URL | Authority gateway target URL | http://llm-service:8600 |
-| LLM_TIMEOUT | Authority-to-LLM timeout seconds | 30 |
-
-Linux note: if Ollama runs on host and host.docker.internal is unavailable, use 172.17.0.1 bridge gateway or run Ollama as a peer container.
-
-## API and Access Points
-
-| Component | URL |
-|---|---|
-| Authority REST | http://localhost:1317 |
-| Authority WebSocket | ws://localhost:26657/websocket |
-| Edge Planet | http://localhost:8100 |
-| FL Aggregator | http://localhost:8200 |
-| Predictive Service | http://localhost:8300 |
-| Compliance Engine | http://localhost:8400 |
-| Webhook Service | http://localhost:8500 |
-| LLM Service | http://localhost:8600 |
-
-## Kubernetes Deployment Path (Phase VI)
-
-For production deployment, use [PHASE_VI_SETUP.md](PHASE_VI_SETUP.md) and manifests under [k8s](k8s).
-
-Typical order:
+See [PHASE_VI_SETUP.md](PHASE_VI_SETUP.md) and the manifests under [k8s](k8s).
 
 ```bash
 kubectl apply -f k8s/namespaces.yaml
@@ -407,94 +150,120 @@ kubectl apply -f k8s/monitoring/grafana.yaml
 kubectl apply -f k8s/ingress.yaml
 ```
 
-## CI/CD and Security
+## 🤖 Optional local LLM
 
-- CI pipeline: [.github/workflows/ci.yml](.github/workflows/ci.yml)
-- CD pipeline: [.github/workflows/cd.yml](.github/workflows/cd.yml)
-- Security scanning: [.github/workflows/security-scan.yml](.github/workflows/security-scan.yml)
+Start Ollama and pull/verify the model:
 
-These workflows cover linting, tests, container build validation, and vulnerability scanning.
+```bash
+make ollama-up
+make llm-up
+make test-llm
+```
 
-## Backup and Restore
+> Linux note: if Ollama runs on the host and `host.docker.internal` is unavailable, use the `172.17.0.1` bridge gateway or run Ollama as a peer container.
 
-- Backup script: [scripts/backup.sh](scripts/backup.sh)
-- Restore script: [scripts/restore.sh](scripts/restore.sh)
+## 📁 Repository layout
 
-Run manually:
+```
+galaxy_mvp/
+├── backend/               # Core ingestion/backend services
+├── edge-planet/           # Edge inference (YOLO/agent) service
+├── swarm-node/            # libp2p swarm mesh with mTLS
+├── authority-chain/       # Cosmos-style authority + voting
+├── intelligence-layer/    # FL aggregator + predictive service
+├── expansion-layer/       # Compliance engine + webhooks
+├── economic-layer/        # CosmWasm contracts + economy
+├── llm-service/           # Ollama-backed analysis and chat
+├── auth-service/          # Authentication
+├── workers/               # Background workers
+├── frontend/              # Dashboard
+├── portfolio/             # Landing/portfolio page
+├── k8s/                   # Kubernetes deployment manifests
+├── docs/                  # LLM integration guides
+├── models/                # Mounted model artifacts
+├── scripts/               # Backup/restore and tooling
+└── .github/workflows/     # CI/CD and security scanning
+```
+
+## 🔧 Configuration
+
+All runtime configuration is environment-driven. Reference: [docker-compose.yml](docker-compose.yml) and [k8s/configmaps.yaml](k8s/configmaps.yaml).
+
+### Core services
+
+| Service | Key environment variables |
+| --- | --- |
+| authority-chain | `CHAIN_ID`, `CHAIN_VOTE_THRESHOLD`, `CHAIN_COMPLIANCE_URL`, `LLM_SERVICE_URL`, `LLM_TIMEOUT` |
+| swarm-node | `SWARM_NODE_NAME`, `SWARM_RENDEZVOUS`, `SWARM_BOOTSTRAP_SEEDS`, `VALIDATOR_GRPC_ADDR` |
+| edge-planet | `SWARM_INGEST_URL`, `FL_ENABLED`, `FL_AGGREGATOR_URL`, `FL_SYNC_INTERVAL_SECONDS` |
+| fl-aggregator | `FL_DATABASE_URL`, `FL_MODEL_DIR`, `FL_MIN_UPDATES_FOR_AGG` |
+| predictive-service | `PRED_AUTHORITY_URL`, `PRED_SWARM_PUBLISH_URL`, `PRED_RISK_THRESHOLD` |
+| compliance-engine | `COMPLIANCE_DEFAULT_REGION`, `COMPLIANCE_HIPAA_EVENT_TYPES`, `COMPLIANCE_PII_KEYS` |
+| webhook-service | `WEBHOOK_DATABASE_URL`, `WEBHOOK_AUTHORITY_EVENTS_URL`, `WEBHOOK_MAX_RETRIES` |
+
+### LLM service
+
+| Variable | Purpose | Default |
+| --- | --- | --- |
+| `OLLAMA_URL` | Ollama API base URL | `http://host.docker.internal:11434` |
+| `OLLAMA_MODEL` | Local model tag | `deepseek-llm:6.7b` |
+| `OLLAMA_TIMEOUT` | Inference timeout (s) | `60` |
+| `LLM_ENABLED` | Toggle LLM behavior | `true` |
+| `LLM_SERVICE_URL` | Authority gateway target | `http://llm-service:8600` |
+| `LLM_TIMEOUT` | Authority→LLM timeout (s) | `30` |
+
+## 📡 API surface
+
+| Component | URL |
+| --- | --- |
+| Authority REST | `http://localhost:1317` |
+| Authority WebSocket | `ws://localhost:26657/websocket` |
+| Edge Planet | `http://localhost:8100` |
+| FL Aggregator | `http://localhost:8200` |
+| Predictive Service | `http://localhost:8300` |
+| Compliance Engine | `http://localhost:8400` |
+| Webhook Service | `http://localhost:8500` |
+| LLM Service | `http://localhost:8600` |
+
+## 🔄 Backup & restore
 
 ```bash
 bash scripts/backup.sh
 bash scripts/restore.sh /path/to/backup.tar.gz
 ```
 
-## Troubleshooting
+## 🛡️ CI/CD & security
 
-### Docker Compose command not found
+- CI: [.github/workflows/ci.yml](.github/workflows/ci.yml)
+- CD & Cloudflare Pages: [.github/workflows/cd.yml](.github/workflows/cd.yml) · [cloudflare-pages.yml](.github/workflows/cloudflare-pages.yml)
+- Vulnerability scanning: [.github/workflows/security-scan.yml](.github/workflows/security-scan.yml)
 
-Use Docker Compose plugin syntax on modern Docker:
+Workflows cover linting, tests, container build validation, and vulnerability scanning. See [SECURITY.md](SECURITY.md) to report a vulnerability.
 
-```bash
-docker compose up -d
-```
+## 📖 Documentation
 
-If this repo commands use docker-compose, install compatibility package or alias.
+| Document | Covers |
+| --- | --- |
+| [ARCHITECTURE_SUMMARY.md](ARCHITECTURE_SUMMARY.md) | System architecture overview |
+| [API_INTEGRATION.md](API_INTEGRATION.md) | API integration details |
+| [PHASE_I_SETUP.md](PHASE_I_SETUP.md) — [PHASE_VI_SETUP.md](PHASE_VI_SETUP.md) | Phase-by-phase setup guides |
+| [docs/LLM_INTEGRATION.md](docs/LLM_INTEGRATION.md) · [docs/LLM_QUICKSTART.md](docs/LLM_QUICKSTART.md) | LLM service integration |
+| [STATUS_REPORT.md](STATUS_REPORT.md) | Development status |
 
-### Service unhealthy or restart loops
+## 🩺 Troubleshooting
 
-- Check logs: `make logs`
-- Validate compose expansion: `docker compose config`
-- Confirm dependency health endpoints return 200
+| Symptom | Resolution |
+| --- | --- |
+| `docker-compose` not found | Use `docker compose up -d` (plugin syntax) on modern Docker |
+| Service unhealthy / restart loops | `make logs`, validate `docker compose config`, confirm dependency health returns 200 |
+| LLM cannot reach Ollama | Verify `curl http://localhost:11434/api/tags`; set `OLLAMA_URL` per environment |
+| Swarm TLS errors | `make swarm-certs && make swarm-down && make swarm-up` |
+| Inconsistent PostgreSQL state | `make clean && make swarm-up` |
 
-### LLM service cannot reach Ollama
+## 🤝 Contributing
 
-- Verify host Ollama: `curl http://localhost:11434/api/tags`
-- From llm-service container, test configured OLLAMA_URL
-- Switch OLLAMA_URL based on environment:
-  - Docker Desktop: host.docker.internal
-  - Linux host bridge: 172.17.0.1
-  - Sidecar container: ollama:11434
+Contributions, issues, and feature requests are welcome. Read [CONTRIBUTING.md](CONTRIBUTING.md) first and review the [Code of Conduct](CODE_OF_CONDUCT.md).
 
-### Swarm TLS errors
+## 📄 License
 
-Regenerate certs and restart:
-
-```bash
-make swarm-certs
-make swarm-down
-make swarm-up
-```
-
-### PostgreSQL state issues
-
-If local data is inconsistent:
-
-```bash
-make clean
-make swarm-up
-```
-
-## Operational Commands
-
-```bash
-make help
-make up
-make down
-make ps
-make logs
-make test
-make chain-unit-test
-make contracts-test
-make ibc-up
-make test-llm
-```
-
-## Compatibility and Safety Notes
-
-- Backward-compatible defaults are preserved across phases.
-- Optional integrations (IBC profile, LLM service) are toggleable by profile/env.
-- Health endpoints exist for runtime services and are wired into Compose/Kubernetes probes.
-- Configuration is environment-variable based; avoid hardcoding secrets in manifests.
-
-## License and Contribution
-
-Internal project guidelines apply. Keep changes minimal, typed where applicable, and accompanied by docs/test updates for any contract changes.
+[MIT](LICENSE) © 2026 [Bittu Sharma](https://github.com/honeyamn10-source)
