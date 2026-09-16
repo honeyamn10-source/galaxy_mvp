@@ -1,4 +1,12 @@
+<p align="center">
+  <img src="docs/logo/logo.png" width="120" height="120" alt="Galaxy logo — six swarm nodes orbiting an authority-chain nucleus" />
+</p>
+
 <h1 align="center">Galaxy</h1>
+
+<p align="center">
+  <img src="docs/logo/logo.png" width="168" height="168" alt="Galaxy — six edge swarm nodes orbiting an authority-chain nucleus" />
+</p>
 
 <p align="center">
   <b>Enhanced Autonomous Cognitive Galaxy</b>
@@ -33,6 +41,20 @@
 | 📋 **Expansion & economy** | Compliance transformation, webhooks, CosmWasm contracts, IBC relay profile |
 | 🛡️ **Hardened delivery** | Kubernetes manifests, monitoring, backup/restore, and CI/CD |
 | 🤖 **Optional local LLM** | DeepSeek augmentation (via Ollama) for nuanced verification and chat |
+
+## 🖼️ Gallery & screenshots
+
+Real, loopback-only captures from `docs/screenshots/` — the landing page and dashboard preview, served strictly on `127.0.0.1` and rendered headlessly. Nothing here listens beyond loopback.
+
+<p align="center">
+  <img src="docs/screenshots/landing-hero.png" alt="Galaxy landing page — hero render over loopback" />
+</p>
+
+See `docs/screenshots/` for the full gallery, `docs/diagrams/` for the architecture diagram (SVG + PNG), and `docs/logo/` for the logo source.
+
+## 🛡️ Design & team structure
+
+Decisions are tracked as **Architecture Decision Records** in `docs/decisions/` — including **[ADR-0005 — many-agent team collaboration](docs/decisions/0005-many-agent-team-collaboration.md)**: Galaxy behaves like a *team of specialist agents* (a permission-led crew), with a team-lead gating approvals, and **no single role granted "do anything over the internet" or surveillance access**. Universal across fields means more governed, field-specialist roles — never fewer guardrails.
 
 ## 🧭 Architecture
 

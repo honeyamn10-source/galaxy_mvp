@@ -1,0 +1,102 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="900" viewBox="0 0 1600 900" role="img" aria-labelledby="t d">
+<title id="t">Galaxy architecture — edge event detection to authority-verified pipeline</title>
+<desc id="d">Edge Planet spawns Swarm Nodes; a node forwards to the Authority Chain Gateway; the gateway writes events to PostgreSQL and Redis, delegates to a Compliance Engine with a Webhook Service, and feeds the FL aggregator, Predictive Serviceable and LLM Service (Ollama DeepSeek); the Dashboard talks to the gateway, predictive and LLM services.</desc>
+<defs>
+<linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#081020"/><stop offset="1" stop-color="#05070f"/></linearGradient>
+<linearGradient id="edge" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#0e2a44"/><stop offset="1" stop-color="#0a1a2e"/></linearGradient>
+<linearGradient id="core" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#381d54"/><stop offset="1" stop-color="#201238"/></linearGradient>
+<linearGradient id="svc" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#0f2340"/><stop offset="1" stop-color="#0a1830"/></linearGradient>
+<linearGradient id="fe" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#0a3a2e"/><stop offset="1" stop-color="#07241c"/></linearGradient>
+<marker id="ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5L0 10z" fill="#7dd3fc"/></marker>
+<marker id="ard" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5L0 10z" fill="#94a3b8"/></marker>
+</defs>
+<rect width="1600" height="900" fill="url(#bg)"/>
+<text x="800" y="54" text-anchor="middle" font-family="Segoe UI, system-ui, sans-serif" font-size="28" font-weight="700" fill="#e2e8f0">Galaxy — System Architecture</text>
+<text x="800" y="82" text-anchor="middle" font-family="Segoe UI, system-ui, sans-serif" font-size="14" fill="#94a3b8">Edge event detection &#8594; authority-verified, federated AI platform</text>
+<line x1="0" y1="118" x2="1600" y2="118" stroke="#1e293b" stroke-width="1"/>
+
+<!-- EDGE PLANET + SWARM (left, outdoor/loopback) -->
+<g font-family="Segoe UI, system-ui, sans-serif">
+<rect x="70" y="180" width="300" height="240" rx="16" fill="url(#edge)" stroke="#38bdf8" stroke-width="1.5"/>
+<text x="220" y="212" text-anchor="middle" font-size="15" font-weight="700" fill="#38bdf8">Layer 1 · Edge Planet</text>
+<text x="100" y="244" font-size="12" fill="#a5f3fc">Local sensor/image inference</text>
+<text x="100" y="268" font-size="12" fill="#cbd5e1">Events produced by device</text>
+<rect x="110" y="290" width="240" height="108" rx="12" fill="#0a1a2e" stroke="#38bdf8" stroke-width="1"/>
+<text x="230" y="316" text-anchor="middle" font-size="13" font-weight="700" fill="#a5f3fc">Swarm Node</text>
+<text x="130" y="340" font-size="11.5" fill="#94a3b8">libp2p · mesh · mTLS</text>
+<text x="130" y="360" font-size="11.5" fill="#94a3b8">validator forwarding</text>
+</g>
+
+<!-- AUTHORITY CHAIN GATEWAY (center) -->
+<g font-family="Segoe UI, system-ui, sans-serif">
+<rect x="460" y="170" width="320" height="270" rx="16" fill="url(#core)" stroke="#a855f7" stroke-width="1.75"/>
+<text x="620" y="202" text-anchor="middle" font-size="15" font-weight="700" fill="#d8b4fe">Layer 2 · Authority Chain</text>
+<text x="620" y="224" text-anchor="middle" font-size="12" fill="#c4b5fd">consensus · verification · rewards</text>
+<rect x="500" y="244" width="240" height="52" rx="12" fill="#31184f" stroke="#c084fc" stroke-width="1"/>
+<text x="620" y="270" text-anchor="middle" font-size="12.5" font-weight="700" fill="#e9d5ff">Authority Chain Gateway</text>
+<text x="620" y="288" text-anchor="middle" font-size="11" fill="#c4b5fd">receives swarm events centrally</text>
+</g>
+
+<!-- STORES (postgres + redis) -->
+<g font-family="Segoe UI, system-ui, sans-serif">
+<rect x="820" y="150" width="150" height="110" rx="14" fill="url(#svc)" stroke="#f59e0b" stroke-width="1.25"/>
+<text x="895" y="182" text-anchor="middle" font-size="13" font-weight="700" fill="#fbbf24">PostgreSQL</text>
+<text x="835" y="206" font-size="11" fill="#94a3b8">events · tenants</text>
+<text x="835" y="226" font-size="11" fill="#94a3b8">audit · quotas</text>
+<rect x="820" y="284" width="150" height="110" rx="14" fill="url(#svc)" stroke="#f43f5e" stroke-width="1.25"/>
+<text x="895" y="316" text-anchor="middle" font-size="13" font-weight="700" fill="#fb7185">Redis</text>
+<text x="835" y="340" font-size="11" fill="#94a3b8">live event stream</text>
+<text x="835" y="360" font-size="11" fill="#94a3b8">pub/sub · realtime</text>
+</g>
+
+<!-- services cluster (compliance/webhook/FL/predictive/LLM) -->
+<g font-family="Segoe UI, system-ui, sans-serif">
+<rect x="1010" y="150" width="520" height="118" rx="16" fill="url(#svc)" stroke="#64748b" stroke-width="1"/>
+<text x="1270" y="182" text-anchor="middle" font-size="13" font-weight="700" fill="#a5f3fc">Layer 3 · Intelligence &amp; Automation services</text>
+<rect x="1030" y="196" width="150" height="54" rx="10" fill="#0a1830" stroke="#22d3ee" stroke-width="1"/>
+<text x="1105" y="222" text-anchor="middle" font-size="12" font-weight="700" fill="#67e8f9">Compliance</text>
+<text x="1105" y="240" text-anchor="middle" font-size="10.5" fill="#94a3b8">engine</text>
+<rect x="1190" y="196" width="150" height="54" rx="10" fill="#0a1830" stroke="#22d3ee" stroke-width="1"/>
+<text x="1265" y="222" text-anchor="middle" font-size="12" font-weight="700" fill="#67e8f9">Webhook</text>
+<text x="1265" y="240" text-anchor="middle" font-size="10.5" fill="#94a3b8">service</text>
+<rect x="1350" y="196" width="160" height="54" rx="10" fill="#0a1830" stroke="#22d3ee" stroke-width="1"/>
+<text x="1430" y="222" text-anchor="middle" font-size="12" font-weight="700" fill="#67e8f9">FL aggregator</text>
+<text x="1430" y="240" text-anchor="middle" font-size="10.5" fill="#94a3b8">federated</text>
+</g>
+<g font-family="Segoe UI, system-ui, sans-serif">
+<rect x="1010" y="288" width="520" height="118" rx="16" fill="url(#svc)" stroke="#64748b" stroke-width="1"/>
+<rect x="1030" y="302" width="190" height="54" rx="10" fill="#0a1830" stroke="#f472b6" stroke-width="1"/>
+<text x="1125" y="328" text-anchor="middle" font-size="12" font-weight="700" fill="#f9a8d4">Predictive service</text>
+<text x="1125" y="346" text-anchor="middle" font-size="10.5" fill="#94a3b8">risk analytics</text>
+<rect x="1230" y="302" width="140" height="54" rx="10" fill="#0a1830" stroke="#a78bfa" stroke-width="1"/>
+<text x="1300" y="328" text-anchor="middle" font-size="12" font-weight="700" fill="#c4b5fd">LLM service</text>
+<text x="1300" y="346" text-anchor="middle" font-size="10.5" fill="#94a3b8">DeepSeek</text>
+<rect x="1380" y="302" width="130" height="54" rx="10" fill="#0a1830" stroke="#a78bfa" stroke-width="1"/>
+<text x="1445" y="328" text-anchor="middle" font-size="12" font-weight="700" fill="#c4b5fd">Ollama</text>
+<text x="1445" y="346" text-anchor="middle" font-size="10.5" fill="#94a3b8">local</text>
+</g>
+
+<!-- DASHBOARD (right, loopback) -->
+<g font-family="Segoe UI, system-ui, sans-serif">
+<rect x="1180" y="470" width="350" height="170" rx="16" fill="url(#fe)" stroke="#34d399" stroke-width="1.5"/>
+<text x="1355" y="502" text-anchor="middle" font-size="15" font-weight="700" fill="#6ee7b7">Dashboard</text>
+<text x="1355" y="526" text-anchor="middle" font-size="11.5" fill="#a7f3d0">loopback-only · tenant-isolated</text>
+<text x="1355" y="552" text-anchor="middle" font-size="11.5" fill="#6fb3a0">REPL + web UI · loopback server</text>
+<text x="1355" y="574" text-anchor="middle" font-size="11.5" fill="#94a3b8">no unauthenticated remote access</text>
+</g>
+
+<!-- flows: edge -> node -> gateway; gateway -> stores/services; dashboard -> gateway/predictive/LLM -->
+<g stroke-width="2" fill="none">
+<g stroke="#38bdf8"><path d="M370 300 H458" marker-end="url(#ar)"/></g>
+<g stroke="#38bdf8"><path d="M620 320 V470" marker-end="url(#ar)"/></g>
+<g stroke="#f59e0b"><path d="M780 205 H818" marker-end="url(#ar)"/></g>
+<g stroke="#f43f5e"><path d="M780 339 H818" marker-end="url(#ar)"/></g>
+<g stroke="#67e8f9"><path d="M780 620 H1010 V220 H1030" marker-end="url(#ar)"/></g>
+<g stroke="#67e8f9"><path d="M1110 130 V120 H1445 V340 H1380" marker-end="url(#ar)"/></g>
+<g stroke="#f472b6"><path d="M920 120 H1125 V302" marker-end="url(#ar)"/></g>
+<g stroke="#c4b5fd"><path d="M1355 424 H1300 V302" marker-end="url(#ar)"/></g>
+<g stroke="#94a3b8"><path d="M1355 468 V420 H620" marker-end="url(#ar)"/></g>
+</g>
+
+<text x="800" y="830" text-anchor="middle" font-family="Segoe UI, system-ui, sans-serif" font-size="12" fill="#64748b">Permission-labelled architecture · every agent service runs on loopback · events flow only through the authority chain</text>
+</svg>
