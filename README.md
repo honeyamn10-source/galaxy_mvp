@@ -1,4 +1,9 @@
 <p align="center">
+  <img src="docs/assets/logo.svg" alt="Galaxy MVP logo" width="100%" />
+</p>
+
+
+<p align="center">
   <img src="docs/logo/logo.png" width="120" height="120" alt="Galaxy logo — six swarm nodes orbiting an authority-chain nucleus" />
 </p>
 

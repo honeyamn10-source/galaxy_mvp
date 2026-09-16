@@ -1,67 +1,49 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024" role="img" aria-labelledby="title desc">
-  <title id="title">Galaxy — decentralized AI event-detection platform</title>
-  <desc id="desc">A ring of six authenticated swarm nodes orbiting an authority-chain nucleus on a deep-space field.</desc>
-  <defs>
-    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0" stop-color="#0a1222"/>
-      <stop offset="1" stop-color="#04060f"/>
-    </linearGradient>
-    <radialGradient id="space" cx="0.5" cy="0.45" r="0.72">
-      <stop offset="0" stop-color="#0e1b3a"/>
-      <stop offset="1" stop-color="#04060f"/>
-    </radialGradient>
-    <linearGradient id="ring" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0" stop-color="#38bdf8"/>
-      <stop offset="0.5" stop-color="#a855f7"/>
-      <stop offset="1" stop-color="#38bdf8"/>
-    </linearGradient>
-    <linearGradient id="nucleus" x1="0.2" y1="0" x2="0.8" y2="1">
-      <stop offset="0" stop-color="#67e8f9"/>
-      <stop offset="1" stop-color="#38bdf8"/>
-    </linearGradient>
-    <filter id="glow" x="-60%" y="-60%" width="220%" height="220%">
-      <feGaussianBlur stdDeviation="10" result="b"/>
-      <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
-    </filter>
-  </defs>
-  <rect width="1024" height="1024" fill="url(#bg)"/>
-  <circle cx="512" cy="512" r="470" fill="url(#space)"/>
-  <g opacity="0.28">
-    <circle cx="512" cy="512" r="300" fill="none" stroke="#38bdf8" stroke-width="2"/>
-    <circle cx="512" cy="512" r="292" fill="none" stroke="#a855f7" stroke-width="1" stroke-dasharray="3 8"/>
-  </g>
-  <path d="M512 140 L512 68 M512 884 L512 956" stroke="#38bdf8" stroke-width="3" opacity="0.35"/>
-  <path d="M740 512 L812 512 M212 512 L140 512" stroke="#38bdf8" stroke-width="3" opacity="0.35"/>
-  <path d="M673 351 L723 301 M351 673 L301 723 M673 673 L723 723 M351 351 L301 301" stroke="#38bdf8" stroke-width="3" opacity="0.35"/>
-  <g filter="url(#glow)">
-    <circle cx="512" cy="512" r="70" fill="#0b1b33" stroke="url(#ring)" stroke-width="12"/>
-    <circle cx="512" cy="512" r="34" fill="url(#nucleus)"/>
-    <path d="M512 492 L534 519 L512 545 L490 519 Z" fill="#0a1222"/>
-  </g>
-  <g>
-    <g transform="translate(512 212)">
-      <circle r="34" fill="#0d1a2e" stroke="#38bdf8" stroke-width="4"/>
-      <circle r="4" fill="#38bdf8"/>
-    </g>
-    <g transform="translate(772 388)">
-      <circle r="34" fill="#0d1a2e" stroke="#22d3ee" stroke-width="4"/>
-      <circle r="4" fill="#22d3ee"/>
-    </g>
-    <g transform="translate(734 686)">
-      <circle r="34" fill="#0d1a2e" stroke="#a855f7" stroke-width="4"/>
-      <circle r="4" fill="#a855f7"/>
-    </g>
-    <g transform="translate(512 726)">
-      <circle r="34" fill="#0d1a2e" stroke="#38bdf8" stroke-width="4"/>
-      <circle r="4" fill="#38bdf8"/>
-    </g>
-    <g transform="translate(290 602)">
-      <circle r="34" fill="#0d1a2e" stroke="#e879f9" stroke-width="4"/>
-      <circle r="4" fill="#e879f9"/>
-    </g>
-    <g transform="translate(290 366)">
-      <circle r="34" fill="#0d1a2e" stroke="#67e8f9" stroke-width="4"/>
-      <circle r="4" fill="#67e8f9"/>
-    </g>
-  </g>
-</svg>
+
+      <svg
+        width="854"
+        height="180"
+        xmlns="http://www.w3.org/2000/svg"
+        xmlns:xlink="http://www.w3.org/1999/xlink"
+        style="z-index:1;position:relative"
+        viewBox="0 0 854 180"
+      >
+        <style>
+      .text {   font-size: 45px;   font-weight: 700;   font-family: -apple-system,BlinkMacSystemFont,Segoe UI,Helvetica,Arial,sans-serif,Apple Color Emoji,Segoe UI Emoji;  } .desc {   font-size: 16px;   font-weight: 500;   font-family: -apple-system,BlinkMacSystemFont,Segoe UI,Helvetica,Arial,sans-serif,Apple Color Emoji,Segoe UI Emoji;  } 
+      .text, .desc {   animation: fadeIn 1.2s ease-in-out forwards;  } @keyframes fadeIn {   from {     opacity: 0;   }   to {     opacity: 1;   }  } 
+    </style>
+        <defs>
+              <linearGradient id="linear" x1="0%" y1="0%" x2="100%" y2="0%">
+                <stop offset="0%" stop-color="#1D2B64"/><stop offset="50%" stop-color="#C33764"/><stop offset="100%" stop-color="#8E2DE2"/>
+              </linearGradient>
+            </defs>
+        
+      <g transform="translate(427, 90) scale(1, 1) translate(-427, -90)">
+        <path d="" fill="url(#linear)" opacity="0.4" >
+          <animate
+              attributeName="d"
+              dur="20s"
+              repeatCount="indefinite"
+              keyTimes="0;0.333;0.667;1"
+              calcmod="spline"
+              keySplines="0.2 0 0.2 1;0.2 0 0.2 1;0.2 0 0.2 1"
+              begin="0s"
+              values="M0 0L 0 100Q 213.5 140 427 110T 854 135L 854 0 Z;M0 0L 0 125Q 213.5 140 427 120T 854 110L 854 0 Z;M0 0L 0 145Q 213.5 115 427 145T 854 110L 854 0 Z;M0 0L 0 100Q 213.5 140 427 110T 854 135L 854 0 Z">
+          </animate>
+        </path>
+        <path d="" fill="url(#linear)" opacity="0.4" >
+          <animate
+            attributeName="d"
+            dur="20s"
+            repeatCount="indefinite"
+            keyTimes="0;0.333;0.667;1"
+            calcmod="spline"
+            keySplines="0.2 0 0.2 1;0.2 0 0.2 1;0.2 0 0.2 1"
+            begin="-10s"
+            values="M0 0L 0 115Q 213.5 160 427 130T 854 140L 854 0 Z;M0 0L 0 130Q 213.5 100 427 100T 854 120L 854 0 Z;M0 0L 0 125Q 213.5 105 427 130T 854 145L 854 0 Z;M0 0L 0 115Q 213.5 160 427 130T 854 140L 854 0 Z">
+          </animate>
+        </path>
+      </g>
+         <text text-anchor="middle" dominant-baseline="middle" x="50%" y="35%" class="text" style="fill:#ffffff;" stroke="#none" stroke-width="1" >Galaxy MVP</text>
+        <text text-anchor="middle" dominant-baseline="middle" x="50%" y="55%" class="desc" style="fill:#ffffff;">Ultra-Level Professional</text>
+      </svg>
+    
