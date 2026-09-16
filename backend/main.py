@@ -394,18 +394,18 @@ async def websocket_events(websocket: WebSocket):
         try:
             while True:
                 # Keep connection open; clients can optionally send ping messages.
-                aw
-
-
-@app.get("/metrics")
-def metrics():
-    return generate_latest()ait websocket.receive_text()
+                await websocket.receive_text()
         except WebSocketDisconnect:
             logger.info(f"WebSocket disconnected for tenant {tenant.id}")
         finally:
             ws_manager.disconnect(tenant.id, websocket)
     finally:
         db.close()
+
+
+@app.get("/metrics")
+def metrics():
+    return generate_latest()
 
 
 if __name__ == "__main__":
