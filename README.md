@@ -38,11 +38,11 @@
 
 ```mermaid
 flowchart LR
-  EP[Edge Planet │ YOLO/Agent] --> SN1[Swarm Node 1]
+  EP[Edge Planet] --> SN1[Swarm Node 1]
   SN1 --> SN2[Swarm Node 2]
   SN1 --> AC[Authority Chain Gateway]
-  AC --> DB[(PostgreSQL)]
-  AC --> RD[(Redis)]
+  AC --> DB[PostgreSQL]
+  AC --> RD[Redis]
   AC --> CE[Compliance Engine]
   CE --> WS[Webhook Service]
   AC --> FL[FL Aggregator]
