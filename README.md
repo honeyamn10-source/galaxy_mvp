@@ -1,26 +1,24 @@
+<p align="center"><img src="docs/assets/readme-cover.svg" alt="Galaxy — Explore event intelligence from edge to dashboard." width="100%"></p>
+
 <h1 align="center">Galaxy</h1>
+<p align="center"><strong>Explore event intelligence from edge to dashboard.</strong></p>
+<p align="center"><a href="#project-at-a-glance">Overview</a> · <a href="#start-here">Start here</a> · <a href="#project-guide">Project guide</a> · <a href="https://github.com/honeyamn10-source/galaxy_mvp/issues">Issues</a></p>
 
-<p align="center">
-  <b>Enhanced Autonomous Cognitive Galaxy</b>
-  <br />
-  <em>A decentralized AI event-detection platform — edge inference, secure swarm propagation, blockchain authority, and federated intelligence.</em>
-</p>
+[![CI](https://github.com/honeyamn10-source/galaxy_mvp/actions/workflows/ci.yml/badge.svg)](https://github.com/honeyamn10-source/galaxy_mvp/actions/workflows/ci.yml)
 
-<p align="center">
-  <a href="https://github.com/honeyamn10-source/galaxy_mvp/blob/main/LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue.svg" alt="License: MIT"></a>
-  <a href="https://github.com/honeyamn10-source/galaxy_mvp/releases"><img src="https://img.shields.io/badge/version-2.0-blue.svg" alt="Version: 2.0"></a>
-  <a href="https://github.com/honeyamn10-source/galaxy_mvp/actions/workflows/ci.yml"><img src="https://github.com/honeyamn10-source/galaxy_mvp/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
-  <a href="https://github.com/honeyamn10-source/galaxy_mvp/actions/workflows/security-scan.yml"><img src="https://github.com/honeyamn10-source/galaxy_mvp/actions/workflows/security-scan.yml/badge.svg" alt="Security"></a>
-  <a href="https://github.com/honeyamn10-source/galaxy_mvp"><img src="https://img.shields.io/badge/stage-development-important.svg" alt="Stage: Development"></a>
-  <a href="https://www.python.org/"><img src="https://img.shields.io/badge/python-3.11+-3776AB.svg" alt="Python 3.11+"></a>
-  <a href="https://www.docker.com/"><img src="https://img.shields.io/badge/docker-compose-2496ED.svg" alt="Docker Compose"></a>
-</p>
+Edge event ingestion, swarm transport and experimental intelligence services.
 
----
+## Project at a glance
 
-**Galaxy** is a decentralized AI event-detection platform built for environments that need edge inference at the source, tamper-evident event verification, and privacy-preserving learning — without handing data to a central party. Events are detected at the edge, propagated through an authenticated peer-to-peer swarm, verified by a blockchain-backed authority chain, and analyzed by a federated intelligence layer.
+| Current scope | Release boundary |
+| --- | --- |
+| **Research platform** | Phase completion labels are not evidence of production or consensus correctness. |
 
-> **Review status:** This is a development repository. Phase labels describe the existing implementation and notes, not a production certification. Validate deployment, security, and integrations before any release.
+## Start here
+
+Use the setup commands in the project guide below. Check configuration and current workflow results before deploying.
+
+## Project guide
 
 ## 🚀 What Galaxy delivers
 
@@ -37,7 +35,7 @@
 ## 🧭 Architecture
 
 ```mermaid
-flowchart LR
+flowchart TD
   EP[Edge Planet] --> SN1[Swarm Node 1]
   SN1 --> SN2[Swarm Node 2]
   SN1 --> AC[Authority Chain Gateway]
@@ -58,13 +56,13 @@ flowchart LR
 
 | Phase | Name | Status | Core outcome |
 | --- | --- | --- | --- |
-| I | Edge & Backend | ✅ | FastAPI backend, dashboard, PostgreSQL, Redis, edge ingestion |
-| II | Swarm Mesh | ✅ | libp2p event mesh with mTLS and validator forwarding |
-| III | Blockchain Authority | ✅ | Cosmos-like authority node and event voting surfaces |
-| IV | Intelligence | ✅ | FL aggregator and predictive risk service |
-| V | Expansion & Economy | ✅ | Compliance engine, webhooks, CosmWasm contracts, Hermes profile |
-| VI | Production Hardening | ✅ | Kubernetes manifests, monitoring stack, CI/CD, backups |
-| LLM | DeepSeek Integration | ✅ | Ollama-backed analysis and chat endpoints |
+| I | Edge & Backend | Implemented surface; acceptance pending | FastAPI backend, dashboard, PostgreSQL, Redis, edge ingestion |
+| II | Swarm Mesh | Implemented surface; acceptance pending | libp2p event mesh with mTLS and validator forwarding |
+| III | Blockchain Authority | Implemented surface; acceptance pending | Cosmos-like authority node and event voting surfaces |
+| IV | Intelligence | Implemented surface; acceptance pending | FL aggregator and predictive risk service |
+| V | Expansion & Economy | Implemented surface; acceptance pending | Compliance engine, webhooks, CosmWasm contracts, Hermes profile |
+| VI | Production Hardening | Implemented surface; acceptance pending | Kubernetes manifests, monitoring stack, CI/CD, backups |
+| LLM | DeepSeek Integration | Implemented surface; acceptance pending | Ollama-backed analysis and chat endpoints |
 
 ## ⚡ Quickstart (Docker Compose)
 
@@ -260,7 +258,7 @@ Workflows cover linting, tests, container build validation, and vulnerability sc
 | Service unhealthy / restart loops | `make logs`, validate `docker compose config`, confirm dependency health returns 200 |
 | LLM cannot reach Ollama | Verify `curl http://localhost:11434/api/tags`; set `OLLAMA_URL` per environment |
 | Swarm TLS errors | `make swarm-certs && make swarm-down && make swarm-up` |
-| Inconsistent PostgreSQL state | `make clean && make swarm-up` |
+| Inconsistent PostgreSQL state | Back up first; inspect migrations and service logs before selecting a recovery procedure |
 
 ## 🤝 Contributing
 
