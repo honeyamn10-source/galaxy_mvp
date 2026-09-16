@@ -9,6 +9,8 @@
 <p align="center">
   <a href="https://github.com/honeyamn10-source/galaxy_mvp/blob/main/LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue.svg" alt="License: MIT"></a>
   <a href="https://github.com/honeyamn10-source/galaxy_mvp/releases"><img src="https://img.shields.io/badge/version-2.0-blue.svg" alt="Version: 2.0"></a>
+  <a href="https://github.com/honeyamn10-source/galaxy_mvp/actions/workflows/ci.yml"><img src="https://github.com/honeyamn10-source/galaxy_mvp/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
+  <a href="https://github.com/honeyamn10-source/galaxy_mvp/actions/workflows/security-scan.yml"><img src="https://github.com/honeyamn10-source/galaxy_mvp/actions/workflows/security-scan.yml/badge.svg" alt="Security"></a>
   <a href="https://github.com/honeyamn10-source/galaxy_mvp"><img src="https://img.shields.io/badge/stage-development-important.svg" alt="Stage: Development"></a>
   <a href="https://www.python.org/"><img src="https://img.shields.io/badge/python-3.11+-3776AB.svg" alt="Python 3.11+"></a>
   <a href="https://www.docker.com/"><img src="https://img.shields.io/badge/docker-compose-2496ED.svg" alt="Docker Compose"></a>
