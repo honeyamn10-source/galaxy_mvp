@@ -1,17 +1,19 @@
 <p align="center">
-  <img src="docs/assets/logo.svg" alt="galaxy-mvp logo" width="100%" />
+  <img src="docs/assets/logo.svg" alt="Galaxy MVP — autonomous edge-intelligence platform" width="100%" />
 </p>
+
+<p align="center">
+  <img src="docs/logo/logo.png" width="96" height="96" alt="Galaxy logo mark" />
+</p>
+
 
 
 <p align="center">
+  <b>Autonomous edge-intelligence platform</b>
+  <br />
+  <em>Decentralized swarm compute with an AI authority chain — edge inference, federated learning, and tamper-evident event verification.</em>
 </p>
-
-
-<p align="center">
-  <img src="docs/logo/logo.png" width="120" height="120" alt="Galaxy logo — six swarm nodes orbiting an authority-chain nucleus" />
-</p>
-
-<h1 align="center">Galaxy</h1>
+Galaxy</h1>
 
 <p align="center">
   <img src="docs/logo/logo.png" width="168" height="168" alt="Galaxy — six edge swarm nodes orbiting an authority-chain nucleus" />
