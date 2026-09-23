@@ -1,103 +1,18 @@
-<p align="center">
-  <img src="docs/assets/logo.svg" alt="Galaxy MVP — autonomous edge-intelligence platform" width="100%" />
-</p>
+![Galaxy](docs/assets/cover.svg)
 
-<p align="center">
-  <img src="docs/logo/logo.png" width="96" height="96" alt="Galaxy logo mark" />
-</p>
+# Galaxy
 
+A development platform exploring edge event detection, swarm propagation and authority-based event verification.
 
+[Project website](https://honeyamn10-source.github.io/galaxy_mvp/) · [Build results](https://github.com/honeyamn10-source/galaxy_mvp/actions)
 
-<p align="center">
-  <b>Autonomous edge-intelligence platform</b>
-  <br />
-  <em>Decentralized swarm compute with an AI authority chain — edge inference, federated learning, and tamper-evident event verification.</em>
-</p>
-Galaxy</h1>
+## What it does
 
-<p align="center">
-  <img src="docs/logo/logo.png" width="168" height="168" alt="Galaxy — six edge swarm nodes orbiting an authority-chain nucleus" />
-</p>
+- **Edge.** Python services ingest events and support model-integration paths.
+- **Swarm.** Go and libp2p components explore peer propagation with development mTLS certificates.
+- **Authority.** Authority services, a dashboard and intelligence layers support verification experiments.
 
-<p align="center">
-  <b>Enhanced Autonomous Cognitive Galaxy</b>
-  <br />
-  <em>A decentralized AI event-detection platform — edge inference, secure swarm propagation, blockchain authority, and federated intelligence.</em>
-</p>
-
-<p align="center">
-  <a href="https://github.com/honeyamn10-source/galaxy_mvp/blob/main/LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue.svg" alt="License: MIT"></a>
-  <a href="https://github.com/honeyamn10-source/galaxy_mvp/releases"><img src="https://img.shields.io/badge/version-2.0-blue.svg" alt="Version: 2.0"></a>
-  <a href="https://github.com/honeyamn10-source/galaxy_mvp/actions/workflows/ci.yml"><img src="https://github.com/honeyamn10-source/galaxy_mvp/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
-  <a href="https://github.com/honeyamn10-source/galaxy_mvp/actions/workflows/security-scan.yml"><img src="https://github.com/honeyamn10-source/galaxy_mvp/actions/workflows/security-scan.yml/badge.svg" alt="Security"></a>
-  <a href="https://github.com/honeyamn10-source/galaxy_mvp"><img src="https://img.shields.io/badge/stage-development-important.svg" alt="Stage: Development"></a>
-  <a href="https://www.python.org/"><img src="https://img.shields.io/badge/python-3.11+-3776AB.svg" alt="Python 3.11+"></a>
-  <a href="https://www.docker.com/"><img src="https://img.shields.io/badge/docker-compose-2496ED.svg" alt="Docker Compose"></a>
-</p>
-
----
-
-**Galaxy** is a decentralized AI event-detection platform built for environments that need edge inference at the source, tamper-evident event verification, and privacy-preserving learning — without handing data to a central party. Events are detected at the edge, propagated through an authenticated peer-to-peer swarm, verified by a blockchain-backed authority chain, and analyzed by a federated intelligence layer.
-
-> **Review status:** This is a development repository. Phase labels describe the existing implementation and notes, not a production certification. Validate deployment, security, and integrations before any release.
-
-## 🚀 What Galaxy delivers
-
-| Capability | Description |
-| --- | --- |
-| 🛰️ **Edge AI detection** | Multi-tenant event ingestion with YOLO/agent inference at the source |
-| 🔐 **Secure swarm mesh** | Peer-to-peer propagation over libp2p with mTLS and validator forwarding |
-| ⛓️ **Blockchain authority** | Cosmos-style authority node with event verification, voting, and reward logic |
-| 🧠 **Federated intelligence** | FL aggregation and a predictive risk analytics service |
-| 📋 **Expansion & economy** | Compliance transformation, webhooks, CosmWasm contracts, IBC relay profile |
-| 🛡️ **Hardened delivery** | Kubernetes manifests, monitoring, backup/restore, and CI/CD |
-| 🤖 **Optional local LLM** | DeepSeek augmentation (via Ollama) for nuanced verification and chat |
-
-## 🖼️ Gallery & screenshots
-
-Real, loopback-only captures from `docs/screenshots/` — the landing page and dashboard preview, served strictly on `127.0.0.1` and rendered headlessly. Nothing here listens beyond loopback.
-
-<p align="center">
-  <img src="docs/screenshots/landing-hero.png" alt="Galaxy landing page — hero render over loopback" />
-</p>
-
-See `docs/screenshots/` for the full gallery, `docs/diagrams/` for the architecture diagram (SVG + PNG), and `docs/logo/` for the logo source.
-
-## 🛡️ Design & team structure
-
-Decisions are tracked as **Architecture Decision Records** in `docs/decisions/` — including **[ADR-0005 — many-agent team collaboration](docs/decisions/0005-many-agent-team-collaboration.md)**: Galaxy behaves like a *team of specialist agents* (a permission-led crew), with a team-lead gating approvals, and **no single role granted "do anything over the internet" or surveillance access**. Universal across fields means more governed, field-specialist roles — never fewer guardrails.
-
-## 🧭 Architecture
-
-```mermaid
-flowchart LR
-  EP[Edge Planet] --> SN1[Swarm Node 1]
-  SN1 --> SN2[Swarm Node 2]
-  SN1 --> AC[Authority Chain Gateway]
-  AC --> DB[PostgreSQL]
-  AC --> RD[Redis]
-  AC --> CE[Compliance Engine]
-  CE --> WS[Webhook Service]
-  AC --> FL[FL Aggregator]
-  AC --> PR[Predictive Service]
-  AC --> LLM[LLM Service]
-  LLM --> OLL[Ollama DeepSeek]
-  FE[Dashboard] --> AC
-  FE --> PR
-  FE --> LLM
-```
-
-## 🗺️ System phases
-
-| Phase | Name | Status | Core outcome |
-| --- | --- | --- | --- |
-| I | Edge & Backend | ✅ | FastAPI backend, dashboard, PostgreSQL, Redis, edge ingestion |
-| II | Swarm Mesh | ✅ | libp2p event mesh with mTLS and validator forwarding |
-| III | Blockchain Authority | ✅ | Cosmos-like authority node and event voting surfaces |
-| IV | Intelligence | ✅ | FL aggregator and predictive risk service |
-| V | Expansion & Economy | ✅ | Compliance engine, webhooks, CosmWasm contracts, Hermes profile |
-| VI | Production Hardening | ✅ | Kubernetes manifests, monitoring stack, CI/CD, backups |
-| LLM | DeepSeek Integration | ✅ | Ollama-backed analysis and chat endpoints |
+> Development repository. Included federation code, authority scaffolds and Kubernetes templates do not certify a production-ready or compliant system. This guide is not a live swarm dashboard.
 
 ## ⚡ Quickstart (Docker Compose)
 
@@ -115,10 +30,10 @@ flowchart LR
 make swarm-up
 ```
 
-or equivalently:
+After the Make target generates development certificates, you can also use:
 
 ```bash
-docker-compose up -d --build
+docker compose up -d --build
 ```
 
 ### Verify health
@@ -164,7 +79,7 @@ bash install-galaxy.sh
 
 Prompts: Edge API key, optional RTSP URL, compliance region.
 
-## ✅ Deploying to Kubernetes
+## Kubernetes deployment templates
 
 See [PHASE_VI_SETUP.md](PHASE_VI_SETUP.md) and the manifests under [k8s](k8s).
 
