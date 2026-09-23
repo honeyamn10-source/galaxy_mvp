@@ -9,12 +9,13 @@
 [![Forks](https://img.shields.io/github/forks/honeyamn10-source/galaxy_mvp?style=flat-square&logo=github&label=Forks)](https://github.com/honeyamn10-source/galaxy_mvp/forks)
 [![Issues](https://img.shields.io/github/issues/honeyamn10-source/galaxy_mvp?style=flat-square&logo=github&label=Issues)](https://github.com/honeyamn10-source/galaxy_mvp/issues)
 [![Last Commit](https://img.shields.io/github/last-commit/honeyamn10-source/galaxy_mvp?style=flat-square&logo=github&label=Last%20Commit)](https://github.com/honeyamn10-source/galaxy_mvp/commits/main)
-[![License](https://img.shields.io/github/license/honeyamn10-source/galaxy_mvp?style=flat-square&label=License)](https://github.com/honeyamn10-source/galaxy_mvp/blob/main/LICENSE)
 
 [Repository](https://github.com/honeyamn10-source/galaxy_mvp) · [Issues](https://github.com/honeyamn10-source/galaxy_mvp/issues) · [Pull Requests](https://github.com/honeyamn10-source/galaxy_mvp/pulls) · [Actions](https://github.com/honeyamn10-source/galaxy_mvp/actions)
 
 </div>
 <!-- repo-badges:end -->
+
+
 
 
 A development platform exploring edge event detection, swarm propagation and authority-based event verification.
