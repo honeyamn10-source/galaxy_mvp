@@ -15,6 +15,18 @@
 </div>
 <!-- repo-badges:end -->
 
+<!-- professional-meta:start -->
+<div align="center">
+
+[![ci](https://github.com/honeyamn10-source/galaxy_mvp/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/honeyamn10-source/galaxy_mvp/actions/workflows/ci.yml) [![codeql](https://github.com/honeyamn10-source/galaxy_mvp/actions/workflows/codeql.yml/badge.svg?branch=main)](https://github.com/honeyamn10-source/galaxy_mvp/actions/workflows/codeql.yml) [![security scan](https://github.com/honeyamn10-source/galaxy_mvp/actions/workflows/security-scan.yml/badge.svg?branch=main)](https://github.com/honeyamn10-source/galaxy_mvp/actions/workflows/security-scan.yml)
+
+![Python](https://img.shields.io/badge/Python-3776AB?style=flat-square&logo=python&logoColor=white) ![Go](https://img.shields.io/badge/Go-00ADD8?style=flat-square&logo=go&logoColor=white) ![Docker](https://img.shields.io/badge/Docker-2496ED?style=flat-square&logo=docker&logoColor=white) ![Kubernetes](https://img.shields.io/badge/Kubernetes-326CE5?style=flat-square&logo=kubernetes&logoColor=white)
+
+[Architecture](ARCHITECTURE_SUMMARY.md) · [Documentation](docs) · [Contributing](CONTRIBUTING.md) · [Security](SECURITY.md) · [Changelog](CHANGELOG.md)
+
+</div>
+<!-- professional-meta:end -->
+
 
 
 
